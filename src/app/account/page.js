@@ -1,0 +1,34 @@
+'use client'
+
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+
+export default function AccountPage() {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    // sirve para cerrar sesion del usuario
+    await supabase.auth.signOut();
+    // manda al usuario al inicio
+    router.push('/');
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+      <div className="p-8 bg-white shadow-md rounded-lg text-center">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">
+          ¡Bienvenido a tu cuenta!
+        </h1>
+        <p className="text-gray-600 mb-6">
+          Esta es tu página personal. Desde aquí podrás gestionar tus citas.
+        </p>
+        <button
+          onClick={handleLogout}
+          className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg"
+        >
+          Cerrar Sesión
+        </button>
+      </div>
+    </div>
+  );
+}
