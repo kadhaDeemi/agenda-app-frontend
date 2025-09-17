@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import PrivateRoute from '@/components/PrivateRoute';
 
 export default function AccountPage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function AccountPage() {
   };
 
   return (
+    <PrivateRoute>
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
       <div className="p-8 bg-white shadow-md rounded-lg text-center">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">
@@ -30,5 +32,6 @@ export default function AccountPage() {
         </button>
       </div>
     </div>
+    </PrivateRoute>
   );
 }
