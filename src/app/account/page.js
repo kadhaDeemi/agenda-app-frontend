@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
+import Link from 'next/link';
 
 export default function AccountPage() {
   const router = useRouter();
@@ -24,12 +25,17 @@ export default function AccountPage() {
         <p className="text-gray-600 mb-6">
           Esta es tu página personal. Desde aquí podrás gestionar tus citas.
         </p>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg"
-        >
-          Cerrar Sesión
-        </button>
+        <div className="space-y-4">
+            <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                Gestionar mis Servicios
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
       </div>
     </div>
     </PrivateRoute>
