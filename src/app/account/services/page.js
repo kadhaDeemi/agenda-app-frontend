@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
@@ -10,45 +10,135 @@ export default function ManageServicesPage() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Funcion para obtener los servicios del profesional por id
-  useEffect(() => {
-    const fetchServices = async () => {
-      if (user) {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('services')
-          .select('*')
-          .eq('professional_id', user.id);
+  // Estados para el form
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [duration, setDuration] = useState('');
+  const [price, setPrice] = useState('');
+  const [formMessage, setFormMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-        if (error) {
-          console.error('Error fetching services:', error);
-        } else {
-          setServices(data);
-        }
-        setLoading(false);
+  // Funcion para obtener los servicios
+  const fetchServices = useCallback(  async () => {
+    if (user) {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('professional_id', user.id)
+        .order('created_at', { ascending: false }); // más antiguo abajo
+
+      if (error) {
+        console.error('Error fetching services:', error);
+      } else {
+        setServices(data);
       }
-    };
+      setLoading(false);
+    }
+  }, [user]);
 
+
+  useEffect(() => {
     fetchServices();
-  }, [user]); // Se ejecuta cada vez que el'user' cambia
+  }, [ fetchServices]);
+
+  //maneja el form
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!name || !duration || !price) {
+      setFormMessage('Nombre, Duración y Precio son campos obligatorios.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormMessage('');
+
+    // add a al BBDD
+    const { data, error } = await supabase
+      .from('services')
+      .insert({
+        professional_id: user.id,
+        name,
+        description,
+        duration: parseInt(duration, 10),
+        price: parseFloat(price),
+      })
+      .select() //devuelve el registro insertado
+      .single();
+
+    if (error) {
+      setFormMessage('Error al crear el servicio: ' + error.message);
+    } else {
+      setFormMessage('¡Servicio creado con éxito!');
+      setServices([data, ...services]);
+      // Limpia el form
+      setName('');
+      setDescription('');
+      setDuration('');
+      setPrice('');
+    }
+    setIsSubmitting(false);
+  };
 
   return (
     <PrivateRoute>
       <div className="container mx-auto px-6 py-8">
         <h1 className="text-3xl font-bold mb-6">Gestionar mis Servicios</h1>
 
-        {/* form servicios*/}
+        {/* Formulario add servicios */}
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-          <h2 className="text-2xl font-bold">Añadir Nuevo Servicio</h2>
-          <p className="mt-2 text-gray-600">Próximamente...</p>
+          <h2 className="text-2xl font-bold mb-4">Añadir Nuevo Servicio</h2>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input
+                type="text"
+                placeholder="Nombre del Servicio (ej: Corte de Pelo)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+              <input
+                type="number"
+                placeholder="Duración (en minutos)"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Precio"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+              <textarea
+                placeholder="Descripción (opcional)"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg md:col-span-2"
+                rows="3"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-4 w-full md:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300"
+            >
+              {isSubmitting ? 'Guardando...' : 'Guardar Servicio'}
+            </button>
+            {formMessage && <p className="mt-4 text-sm">{formMessage}</p>}
+          </form>
         </div>
 
         {/* Lista de servicios*/}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-2xl font-bold mb-4">Mis Servicios Actuales</h2>
-          {loading ? (
-            <p>Cargando servicios...</p>
-          ) : services.length > 0 ? (
+          {loading ? ( <p>Cargando servicios...</p> ) : 
+           services.length > 0 ? (
             <ul className="space-y-4">
               {services.map((service) => (
                 <li key={service.id} className="p-4 border rounded-lg flex justify-between items-center">
@@ -63,9 +153,7 @@ export default function ManageServicesPage() {
                 </li>
               ))}
             </ul>
-          ) : (
-            <p>Aún no has añadido ningún servicio.</p>
-          )}
+          ) : ( <p>Aún no has añadido ningún servicio.</p> )}
         </div>
       </div>
     </PrivateRoute>
