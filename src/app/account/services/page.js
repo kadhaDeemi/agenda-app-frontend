@@ -18,6 +18,10 @@ export default function ManageServicesPage() {
   const [formMessage, setFormMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [editingServiceId, setEditingServiceId] = useState(null); 
+  const [editFormData, setEditFormData] = useState({ name: '', description: '', duration: '', price: '' });
+
+
   // Funcion para obtener los servicios
   const fetchServices = useCallback(  async () => {
     if (user) {
@@ -80,6 +84,72 @@ export default function ManageServicesPage() {
     setIsSubmitting(false);
   };
 
+  // Funcion eliminar servicio
+  const handleDelete = async (serviceId) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este servicio? Esta acción no se puede deshacer.')) {
+      // elimina el serivcio en la bbdd
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', serviceId);
+
+      if (error) {
+        alert('Error al eliminar el servicio: ' + error.message);
+      } else {
+        //actualiza los servicios en la pantalla
+        setServices(services.filter(service => service.id !== serviceId));
+        alert('Servicio eliminado con éxito.');
+      }
+    }
+  };
+
+  //funcion editar
+  const handleEditClick = (service) => {
+    setEditingServiceId(service.id);
+    setEditFormData({
+      name: service.name,
+      description: service.description || '',
+      duration: service.duration,
+      price: service.price,
+    });
+  };
+
+  //funcion q se ejecuta al modificar un campo del formulario
+  const handleEditFormChange = (event) => {
+    const { name, value } = event.target;
+    setEditFormData(prevData => ({ ...prevData, [name]: value }));
+  };
+
+  //editar lo servicios
+  const handleUpdate = async (event) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+
+    const { error } = await supabase
+      .from('services')
+      .update({
+        name: editFormData.name,
+        description: editFormData.description,
+        duration: parseInt(editFormData.duration, 10),
+        price: parseFloat(editFormData.price),
+      })
+      .eq('id', editingServiceId);
+
+    if (error) {
+      alert('Error al actualizar el servicio: ' + error.message);
+    } else {
+      setServices(services.map(s => s.id === editingServiceId ? { ...s, ...editFormData } : s));
+      setEditingServiceId(null);
+      alert('Servicio actualizado con éxito.');
+    }
+    setIsSubmitting(false);
+  };
+  
+  //cancela el editar
+  const handleCancelEdit = () => {
+    setEditingServiceId(null);
+  };
+
   return (
     <PrivateRoute>
       <div className="container mx-auto px-6 py-8">
@@ -96,16 +166,14 @@ export default function ManageServicesPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
+                required/>
               <input
                 type="number"
                 placeholder="Duración (en minutos)"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
+                required/>
               <input
                 type="number"
                 step="0.01"
@@ -113,43 +181,71 @@ export default function ManageServicesPage() {
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
+                required/>
               <textarea
                 placeholder="Descripción (opcional)"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg md:col-span-2"
-                rows="3"
-              />
+                rows="3"/>
             </div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="mt-4 w-full md:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300"
-            >
+              className="mt-4 w-full md:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300">
               {isSubmitting ? 'Guardando...' : 'Guardar Servicio'}
             </button>
             {formMessage && <p className="mt-4 text-sm">{formMessage}</p>}
           </form>
         </div>
 
-        {/* Lista de servicios*/}
+        {/*lista servicios*/}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-2xl font-bold mb-4">Mis Servicios Actuales</h2>
           {loading ? ( <p>Cargando servicios...</p> ) : 
            services.length > 0 ? (
             <ul className="space-y-4">
               {services.map((service) => (
-                <li key={service.id} className="p-4 border rounded-lg flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold text-lg">{service.name}</h3>
-                    <p className="text-gray-500">{service.description}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-xl">${service.price}</p>
-                    <p className="text-sm text-gray-500">{service.duration} min</p>
-                  </div>
+                <li key={service.id} className="p-4 border rounded-lg">
+                  {editingServiceId === service.id ? (
+                    // Editar servicios
+                    <form onSubmit={handleUpdate}>
+                      <input type="text" name="name" value={editFormData.name} onChange={handleEditFormChange} className="w-full p-2 border rounded mb-2" />
+                      <textarea name="description" value={editFormData.description} onChange={handleEditFormChange} className="w-full p-2 border rounded mb-2" />
+                      <div className="flex gap-4 mb-4">
+                        <input type="number" name="duration" value={editFormData.duration} onChange={handleEditFormChange} className="w-full p-2 border rounded" placeholder="Duración (min)" />
+                        <input type="number" step="0.01" name="price" value={editFormData.price} onChange={handleEditFormChange} className="w-full p-2 border rounded" placeholder="Precio" />
+                      </div>
+                      <div className="flex space-x-2">
+                        <button type="submit" disabled={isSubmitting} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-sm">
+                          {isSubmitting ? 'Guardando...' : 'Guardar'}
+                        </button>
+                        <button type="button" onClick={handleCancelEdit} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm">
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    // Divs servicios
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+                      <div className="mb-4 md:mb-0">
+                        <h3 className="font-semibold text-lg">{service.name}</h3>
+                        <p className="text-gray-500">{service.description}</p>
+                        <div className="flex items-center text-sm text-gray-500 mt-2">
+                          <span className="mr-4">${service.price}</span>
+                          <span>{service.duration} min</span>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button onClick={() => handleEditClick(service)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded text-sm">
+                          Editar
+                        </button>
+                        <button onClick={() => handleDelete(service.id)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm">
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
