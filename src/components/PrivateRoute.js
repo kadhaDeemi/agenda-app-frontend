@@ -4,19 +4,27 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
-export default function PrivateRoute({ children }) {
-  const { user, loading } = useAuth();
+export default function PrivateRoute({ children, requiredRole }) {
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    //si esta logeado ingresa page account sino lo manda al login
-    if (!loading && !user) {
-      router.push('/login');
+    if (!loading) {
+      // Si no hay usuario va al login
+      if (!user) {
+        router.push('/login');
+      } 
+      // Si se requiere un rol y el rol del perfil no coincide, va a la página de cuenta
+      else if (requiredRole && profile?.role !== requiredRole) {
+        router.push('/account');
+      }
     }
-  }, [user, loading, router]);
+  }, [user, profile, loading, router, requiredRole]);
 
-  if (loading || !user) {
-    return null;
+  // Si esta cargando o si el usuario no cumple la condicion, muestra un loader.
+  // Esto previene que se vea el contenido de la página brevemente antes de redirigir.
+  if (loading || !user || (requiredRole && profile?.role !== requiredRole)) {
+    return <div>Cargando...</div>;
   }
 
   return children;

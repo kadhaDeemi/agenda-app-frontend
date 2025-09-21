@@ -1,12 +1,26 @@
 'use client'
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AccountPage() {
+  const { user } = useAuth();
   const router = useRouter();
+
+  const [profile, setProfile] = useState(null);
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        setProfile(data);
+      }
+    };
+    fetchProfile();
+  }, [user]);
 
   const handleLogout = async () => {
     // sirve para cerrar sesion del usuario
@@ -26,13 +40,17 @@ export default function AccountPage() {
           Esta es tu página personal. Desde aquí podrás gestionar tus citas.
         </p>
         <div className="space-y-4">
-            <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+            {profile?.role === 'profesional' && (
+              <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
                 Gestionar mis Servicios
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg"
-            >
+              </Link>
+            )}
+            {profile?.role === 'cliente' && (
+              <Link href="/account/my-appointments" className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+                Ver Mis Citas
+              </Link>
+            )}
+            <button onClick={handleLogout} className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
               Cerrar Sesión
             </button>
           </div>

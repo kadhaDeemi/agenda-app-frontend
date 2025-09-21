@@ -9,25 +9,45 @@ const AuthContext = createContext();
 // provider contexto
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // obt sesion
-    const getSession = async () => {
+    const getSessionAndProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session ? session.user : null);
+      if (session?.user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setProfile(profileData || null);
+      }
       setLoading(false);
     };
 
-    getSession();
+    getSessionAndProfile();
 
     // ve los cambios en la autentificacion
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setUser(session ? session.user : null);
+        if (session?.user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          setProfile(profileData || null);
+        } else {
+          setProfile(null);
+        }
         setLoading(false);
       }
     );
+
     return () => {
       authListener.subscription.unsubscribe();
     };
@@ -35,6 +55,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
+    profile,
     loading,
   };
 
