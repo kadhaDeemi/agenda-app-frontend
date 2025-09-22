@@ -41,9 +41,15 @@ export default function AccountPage() {
         </p>
         <div className="space-y-4">
             {profile?.role === 'profesional' && (
+              <>
               <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
                 Gestionar mis Servicios
               </Link>
+              <Link href="/account/schedule" className="block w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg">
+                  Gestionar mi Horario
+                </Link>
+              </>
+              
             )}
             {profile?.role === 'cliente' && (
               <Link href="/account/my-appointments" className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">

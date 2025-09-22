@@ -15,7 +15,7 @@ export default function MyAppointmentsPage() {
     const fetchAppointments = async () => {
       if (user) {
         setLoading(true);
-        // Esta consulta es más avanzada: obtiene citas y la información relacionada
+        //obtiene citas y la info relacionada
         const { data, error } = await supabase
           .from('appointments')
           .select(`
@@ -40,7 +40,7 @@ export default function MyAppointmentsPage() {
     fetchAppointments();
   }, [user]);
 
-  // separamos las citas en próximas y pasadas
+  // separamos las citas en prox y pasada
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
     const now = new Date();
     return appointments.reduce((acc, appt) => {
@@ -62,7 +62,7 @@ export default function MyAppointmentsPage() {
           <p>Cargando tus citas...</p>
         ) : (
           <div className="space-y-8">
-            {/* Sección de Próximas Citas */}
+            {/*Seccion de prox citas*/}
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-2xl font-bold mb-4">Próximas Citas</h2>
               {upcomingAppointments.length > 0 ? (
@@ -81,7 +81,7 @@ export default function MyAppointmentsPage() {
               )}
             </div>
 
-            {/* Sección de Citas Pasadas */}
+            {/*Seccion de Citas antiguas */}
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-2xl font-bold mb-4">Historial de Citas</h2>
               {pastAppointments.length > 0 ? (

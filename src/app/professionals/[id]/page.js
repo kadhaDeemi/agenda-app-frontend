@@ -15,6 +15,8 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   const [profile, setProfile] = useState(null);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [schedules, setSchedules] = useState([]);
+  const [overrides, setOverrides] = useState([]);
   
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedService, setSelectedService] = useState(null);
@@ -23,82 +25,125 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   const [isBooking, setIsBooking] = useState(false);
 
   useEffect(() => {
+    // Obtene todos los datos
     async function getProfessionalData(id) {
       setLoading(true);
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('services')
-        .select('*')
-        .eq('professional_id', id);
-
-      if (selectedDate) {
-        const startDate = new Date(selectedDate);
-        startDate.setHours(0, 0, 0, 0);
-        
-        const endDate = new Date(selectedDate);
-        endDate.setHours(23, 59, 59, 999);
-
-        const { data: appointmentsData } = await supabase
-          .from('appointments')
-          .select('appointment_time')
-          .eq('professional_id', id)
-          .gte('appointment_time', startDate.toISOString())
-          .lte('appointment_time', endDate.toISOString());
-        
-        setAppointments(appointmentsData || []);
-      }
+      const [
+        { data: profileData },
+        { data: servicesData },
+        { data: schedulesData },
+        { data: overridesData },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', id).single(),
+        supabase.from('services').select('*').eq('professional_id', id),
+        supabase.from('work_schedules').select('*').eq('professional_id', id),
+        supabase.from('schedule_overrides').select('*').eq('professional_id', id),
+      ]);
       
       setProfile(profileData);
       setServices(servicesData || []);
+      setSchedules(schedulesData || []);
+      setOverrides(overridesData || []);
       setLoading(false);
     }
 
     if (params.id) {
       getProfessionalData(params.id);
     }
-  }, [params.id, selectedDate]);
+  }, [params.id]);
+
+  // Obtiene las citas existentes para el dia selec
+  useEffect(() => {
+    if (!selectedDate || !params.id) return;
+
+    async function getAppointmentsForDate(id, date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+
+      const { data: appointmentsData } = await supabase
+        .from('appointments')
+        .select('appointment_time, services(duration)')
+        .eq('professional_id', id)
+        .gte('appointment_time', startDate.toISOString())
+        .lte('appointment_time', endDate.toISOString());
+      
+      setAppointments(appointmentsData || []);
+    }
+    
+    getAppointmentsForDate(params.id, selectedDate);
+  }, [selectedDate, params.id]);
 
   //HORAS DISPONIBLES
   const availableTimes = useMemo(() => {
     if (!selectedService || !selectedDate) return [];
-    
-    //horario laboral
-    const workHours = [];
-    for (let i = 9; i <= 21; i++) {
-      workHours.push(`${i < 10 ? '0' : ''}${i}:00`);
-      workHours.push(`${i < 10 ? '0' : ''}${i}:30`);
+
+    // Ve si hay dia libre 
+    const dateString = selectedDate.toISOString().split('T')[0];
+    if (overrides.some(o => o.override_date === dateString && !o.start_time)) {
+      return [];
     }
 
-    const bookedTimes = appointments.map(appt => {
-      const date = new Date(appt.appointment_time);
-      return `${date.getHours() < 10 ? '0' : ''}${date.getHours()}:${date.getMinutes() < 10 ? '0' : ''}${date.getMinutes()}`;
+    // Mira el horario para el dia selec
+    const dayOfWeek = selectedDate.getDay();
+    const workBlocks = schedules
+      .filter(s => s.day_of_week === dayOfWeek)
+      .map(s => ({
+        start: s.start_time.substring(0, 5),
+        end: s.end_time.substring(0, 5),
+      }));
+
+    if (workBlocks.length === 0) return [];
+
+    // obt los bloques ya ocupados (reservas)
+    const bookedBlocks = appointments.map(appt => {
+      const startTime = new Date(appt.appointment_time);
+      const endTime = new Date(startTime.getTime() + appt.services.duration * 60000);
+      return {
+        start: `${startTime.getHours() < 10 ? '0' : ''}${startTime.getHours()}:${startTime.getMinutes() < 10 ? '0' : ''}${startTime.getMinutes()}`,
+        end: `${endTime.getHours() < 10 ? '0' : ''}${endTime.getHours()}:${endTime.getMinutes() < 10 ? '0' : ''}${endTime.getMinutes()}`,
+      };
     });
 
+
+    // Generar y filtrar los posibles horarios
+    const availableSlots = [];
+    const serviceDuration = selectedService.duration;
     const now = new Date();
-    //comprueba si la fecha seleccionada es hoy
     const isToday = selectedDate.toDateString() === now.toDateString();
 
-    //Filtra las horas para mostrar solo las futuras y no reservadas
-    return workHours.filter(time => {
-      const [hours, minutes] = time.split(':');
-      const slotTime = new Date(selectedDate);
-      slotTime.setHours(parseInt(hours), parseInt(minutes));
+    workBlocks.forEach(block => {
+      let currentTime = block.start;
+      while (currentTime < block.end) {
+        const [hour, minute] = currentTime.split(':').map(Number);
+        const slotStart = new Date(selectedDate);
+        slotStart.setHours(hour, minute, 0, 0);
 
-      // si la reserva es hoy la hora debe ser posterior a la hora actual
-      const isFutureSlot = isToday ? slotTime > now : true;
-      
-      //La hora no debe esta reservada
-      const isNotBooked = !bookedTimes.includes(time);
+        const slotEnd = new Date(slotStart.getTime() + serviceDuration * 60000);
+        
+        const slotEndTimeString = `${slotEnd.getHours() < 10 ? '0' : ''}${slotEnd.getHours()}:${slotEnd.getMinutes() < 10 ? '0' : ''}${slotEnd.getMinutes()}`;
 
+        // Comprobaciones para que un slot sea valido
+        const isAfterNow = isToday ? slotStart > now : true;
+        const endsWithinWorkBlock = slotEndTimeString <= block.end;
+        const doesNotOverlap = !bookedBlocks.some(booked => 
+          currentTime < booked.end && slotEndTimeString > booked.start
+        );
 
-      return isFutureSlot && isNotBooked;
+        if (isAfterNow && endsWithinWorkBlock && doesNotOverlap) {
+          availableSlots.push(currentTime);
+        }
+
+        //muestra al siguiente posible slot (intervalos de 30 min)
+        const nextSlot = new Date(slotStart.getTime() + 30 * 60000);
+        currentTime = `${nextSlot.getHours() < 10 ? '0' : ''}${nextSlot.getHours()}:${nextSlot.getMinutes() < 10 ? '0' : ''}${nextSlot.getMinutes()}`;
+      }
     });
-  }, [appointments, selectedService, , selectedDate]);
+    
+    return availableSlots;
+
+  }, [selectedService, selectedDate, schedules, overrides, appointments]);
 
   // funcion para agendar
   const handleBooking = async (time) => {
@@ -130,7 +175,10 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
       } else {
         alert('¡Cita agendada con éxito!');
         // Actualiza la lista de citas
-        setAppointments([...appointments, { appointment_time: appointmentDateTime.toISOString() }]);
+        setAppointments(prev => [...prev, {
+  appointment_time: appointmentDateTime.toISOString(),
+  services: { duration: selectedService.duration }
+}]);
       }
       setIsBooking(false);
     }
