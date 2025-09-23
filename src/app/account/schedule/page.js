@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
+import toast from 'react-hot-toast';
 
 const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -61,7 +62,7 @@ export default function ManageSchedulePage() {
     if (!user || !startTime || !endTime) return;
 
     if (startTime >= endTime) {
-      alert('La hora de inicio debe ser anterior a la hora de fin.');
+      toast.error('La hora de inicio debe ser anterior a la hora de fin.');
       return;
     }
 
@@ -74,12 +75,12 @@ export default function ManageSchedulePage() {
       .gt('end_time', startTime);  // Y el horario existente termina DESPUES de que el nuevo empiece
 
     if (overlapError) {
-      alert('Error al verificar horarios existentes: ' + overlapError.message);
+      toast.error('Error al verificar horarios existentes: ' + overlapError.message);
       return;
     }
 
     if (overlappingSchedules && overlappingSchedules.length > 0) {
-      alert('Error: El horario que intentas añadir se solapa con uno ya existente.');
+      toast.error('Error: El horario que intentas añadir se solapa con uno ya existente.');
       return;
     }
 
@@ -91,10 +92,10 @@ export default function ManageSchedulePage() {
     }).select();
 
     if (error) {
-      alert('Error al añadir el horario: ' + error.message);
+      toast.error('Error al añadir el horario: ' + error.message);
     } else {
       setSchedules([...schedules, ...data].sort((a, b) => a.day_of_week - b.day_of_week));
-      alert('Horario añadido con éxito.');
+      toast.success('Horario añadido con éxito.');
     }
   };
 
@@ -102,17 +103,17 @@ export default function ManageSchedulePage() {
     if (window.confirm('¿Seguro que quieres eliminar este horario?')) {
       const { error } = await supabase.from('work_schedules').delete().eq('id', scheduleId);
       if (error) {
-        alert('Error al eliminar el horario: ' + error.message);
+        toast.error('Error al eliminar el horario: ' + error.message);
       } else {
         setSchedules(schedules.filter(s => s.id !== scheduleId));
-        alert('Horario eliminado.');
+        toast.success('Horario eliminado.');
       }
     }
   };
 
   const handleAddOverride = async () => {
     if (!overrideDate) {
-      alert('Por favor, selecciona una fecha.');
+      toast('Por favor, selecciona una fecha.');
       return;
     }
 
@@ -124,10 +125,10 @@ export default function ManageSchedulePage() {
     }).select();
 
     if (error) {
-      alert('Error al añadir el día libre: ' + error.message);
+      toast.error('Error al añadir el día libre: ' + error.message);
     } else {
       setOverrides([...overrides, ...data].sort((a,b) => new Date(a.override_date) - new Date(b.override_date)));
-      alert('Día libre añadido con éxito.');
+      toast.success('Día libre añadido con éxito.');
     }
   };
 
@@ -135,10 +136,10 @@ export default function ManageSchedulePage() {
     if(window.confirm('¿Seguro que quieres eliminar este día libre?')){
       const { error } = await supabase.from('schedule_overrides').delete().eq('id', overrideId);
       if (error) {
-        alert('Error al eliminar el día libre: ' + error.message);
+        toast.error('Error al eliminar el día libre: ' + error.message);
       } else {
         setOverrides(overrides.filter(o => o.id !== overrideId));
-        alert('Día libre eliminado.');
+        toast.success('Día libre eliminado.');
       }
     }
   };

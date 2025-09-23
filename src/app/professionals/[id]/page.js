@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { useAuth } from '@/context/AuthContext';
+import toast from 'react-hot-toast';
 
 
 export default function ProfessionalProfilePage({ params: paramsPromise }) {
@@ -148,11 +149,11 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   // funcion para agendar
   const handleBooking = async (time) => {
     if (!clientUser) {
-      alert('Por favor, inicia sesión para agendar una cita.');
+      toast('Por favor, inicia sesión para agendar una cita.');
       return;
     }
     if (!selectedService) {
-      alert('Por favor, selecciona un servicio primero.');
+      toast('Por favor, selecciona un servicio primero.');
       return;
     }
     
@@ -171,9 +172,9 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
       });
       
       if (error) {
-        alert('Hubo un error al agendar tu cita: ' + error.message);
+        toast.error('Hubo un error al agendar tu cita: ' + error.message);
       } else {
-        alert('¡Cita agendada con éxito!');
+        toast.success('¡Cita agendada con éxito!');
         // Actualiza la lista de citas
         setAppointments(prev => [...prev, {
   appointment_time: appointmentDateTime.toISOString(),

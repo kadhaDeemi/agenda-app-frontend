@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
@@ -8,19 +7,8 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
 export default function AccountPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const router = useRouter();
-
-  const [profile, setProfile] = useState(null);
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (user) {
-        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        setProfile(data);
-      }
-    };
-    fetchProfile();
-  }, [user]);
 
   const handleLogout = async () => {
     // sirve para cerrar sesion del usuario

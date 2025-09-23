@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
+import toast from 'react-hot-toast';
+import { Edit, Trash2 } from 'lucide-react';
 
 export default function ManageServicesPage() {
   const { user } = useAuth();
@@ -94,11 +96,11 @@ export default function ManageServicesPage() {
         .eq('id', serviceId);
 
       if (error) {
-        alert('Error al eliminar el servicio: ' + error.message);
+        toast.error('Error al eliminar el servicio: ' + error.message);
       } else {
         //actualiza los servicios en la pantalla
         setServices(services.filter(service => service.id !== serviceId));
-        alert('Servicio eliminado con éxito.');
+        toast.success('Servicio eliminado con éxito.');
       }
     }
   };
@@ -136,11 +138,11 @@ export default function ManageServicesPage() {
       .eq('id', editingServiceId);
 
     if (error) {
-      alert('Error al actualizar el servicio: ' + error.message);
+      toast.error('Error al actualizar el servicio: ' + error.message);
     } else {
       setServices(services.map(s => s.id === editingServiceId ? { ...s, ...editFormData } : s));
       setEditingServiceId(null);
-      alert('Servicio actualizado con éxito.');
+      toast.success('Servicio actualizado con éxito.');
     }
     setIsSubmitting(false);
   };
@@ -236,11 +238,13 @@ export default function ManageServicesPage() {
                           <span>{service.duration} min</span>
                         </div>
                       </div>
-                      <div className="flex space-x-2">
-                        <button onClick={() => handleEditClick(service)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded text-sm">
+                      <div className="flex space-x-2 mt-2 md:mt-0">
+                        <button onClick={() => handleEditClick(service)} className="flex items-center bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded text-sm">
+                          <Edit className="w-4 h-4 mr-2" />
                           Editar
                         </button>
-                        <button onClick={() => handleDelete(service.id)} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm">
+                        <button onClick={() => handleDelete(service.id)} className="flex items-center bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm">
+                          <Trash2 className="w-4 h-4 mr-2" />
                           Eliminar
                         </button>
                       </div>
