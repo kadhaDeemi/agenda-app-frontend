@@ -5,12 +5,16 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import toast from 'react-hot-toast';
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/dist/style.css';   
 
 export default function ProfessionalDashboardPage() {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('todas');
+  const [dateRange, setDateRange] = useState(undefined);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -66,12 +70,28 @@ export default function ProfessionalDashboardPage() {
     }
   };
 
+  //filtrado de reservas
   const filteredAppointments = useMemo(() => {
+    let filtered = appointments; 
+
     if (statusFilter === 'todas') {
       return appointments;
     }
-    return appointments.filter(appt => appt.status === statusFilter);
-  }, [appointments, statusFilter]);
+    if (dateRange?.from) {
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+
+        const toDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
+        toDate.setHours(23, 59, 59, 999);
+
+        filtered = filtered.filter(appt => {
+            const apptDate = new Date(appt.appointment_time);
+            return apptDate >= fromDate && apptDate <= toDate;
+        });
+    }
+
+    return filtered;
+  }, [appointments, statusFilter, dateRange]);
 
 
   return (
@@ -83,13 +103,37 @@ export default function ProfessionalDashboardPage() {
           <p>Cargando tu agenda...</p>
         ) : (
           <div className="bg-white p-6 rounded-lg shadow-md">
-            {/* Sección de botones de filtro */}
-            <div className="flex flex-wrap gap-2 mb-6 border-b pb-4">
-              <button onClick={() => setStatusFilter('todas')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'todas' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Todas</button>
-              <button onClick={() => setStatusFilter('agendada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'agendada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Agendadas</button>
-              <button onClick={() => setStatusFilter('confirmada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'confirmada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Confirmadas</button>
-              <button onClick={() => setStatusFilter('completada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'completada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Completadas</button>
-              <button onClick={() => setStatusFilter('cancelada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'cancelada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Canceladas</button>
+            {/* Sección de filtros */}
+            <div className="flex flex-col md:flex-row gap-8 mb-6 border-b pb-4">
+              <div className="flex flex-col gap-2">
+                <h3 className="font-bold text-lg">Filtrar por Estado</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setStatusFilter('todas')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'todas' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Todas</button>
+                  <button onClick={() => setStatusFilter('agendada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'agendada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Agendadas</button>
+                  <button onClick={() => setStatusFilter('confirmada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'confirmada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Confirmadas</button>
+                  <button onClick={() => setStatusFilter('completada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'completada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Completadas</button>
+                  <button onClick={() => setStatusFilter('cancelada')} className={`px-4 py-2 rounded-lg font-semibold ${statusFilter === 'cancelada' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>Canceladas</button>
+                </div>
+              </div>
+              {/* Filtro de fecha */}
+              <div className="flex flex-col gap-2">
+                <h2 className="font-bold text-lg">Filtrar por Fecha</h2>
+                <button onClick={() => setShowCalendar(!showCalendar)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                  {showCalendar ? 'Ocultar Calendario' : 'Seleccionar Fechas'}
+                </button>
+                {showCalendar && (
+                  <div className="flex items-center gap-4 mt-2">
+                    <DayPicker mode="range" selected={dateRange} onSelect={setDateRange} className="bg-white p-2 border rounded-lg shadow"/>
+                    {dateRange && (
+                      <button onClick={() => { setDateRange(undefined);
+                        setShowCalendar(false); }}
+                        className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg self-start">
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             {filteredAppointments.length > 0 ? (
               <ul className="space-y-4">
