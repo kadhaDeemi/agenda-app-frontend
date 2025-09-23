@@ -36,15 +36,17 @@ export default function AccountPage() {
               <Link href="/account/schedule" className="block w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg">
                   Gestionar mi Horario
                 </Link>
+              <Link href="/account/dashboard" className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                  Ver mi Agenda de Citas
+              </Link>
               </>
-              
             )}
             {profile?.role === 'cliente' && (
               <Link href="/account/my-appointments" className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
                 Ver Mis Citas
               </Link>
             )}
-            <button onClick={handleLogout} className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
+            <button onClick={handleLogout} className="block w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
               Cerrar Sesión
             </button>
           </div>
