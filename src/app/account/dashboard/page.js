@@ -8,6 +8,12 @@ import toast from 'react-hot-toast';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';   
 
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import esLocale from '@fullcalendar/core/locales/es';
+
 export default function ProfessionalDashboardPage() {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState([]);
@@ -27,7 +33,7 @@ export default function ProfessionalDashboardPage() {
             id,
             appointment_time,
             status,
-            services ( name ),
+            services ( name, duration ),
             client:profiles!appointments_client_id_fkey ( full_name )
           `)
           .eq('professional_id', user.id)
@@ -45,6 +51,7 @@ export default function ProfessionalDashboardPage() {
     fetchAppointments();
     }, [user]);
 
+    // cambiar estado de la reserva
     const handleUpdateStatus = async (appointmentId, newStatus) => {
     const confirmationText = {
       'confirmada': '¿Estás seguro de que quieres confirmar esta cita?',
@@ -74,8 +81,8 @@ export default function ProfessionalDashboardPage() {
   const filteredAppointments = useMemo(() => {
     let filtered = appointments; 
 
-    if (statusFilter === 'todas') {
-      return appointments;
+    if (statusFilter !== 'todas') {
+      filtered = filtered.filter(appt => appt.status === statusFilter);
     }
     if (dateRange?.from) {
         const fromDate = new Date(dateRange.from);
@@ -92,6 +99,30 @@ export default function ProfessionalDashboardPage() {
 
     return filtered;
   }, [appointments, statusFilter, dateRange]);
+
+
+  // Transforma las citas a eventos en el calendario
+  const calendarEvents = useMemo(() => {
+    return filteredAppointments.map(appt => {
+      const startTime = new Date(appt.appointment_time);
+      const originalDuration = appt.services.duration;
+      // Redondea la duracion del servicio
+      // divide por 30 y redondea el servicio. ej: servicio dura 45 min = 45/30 = 1.5 = 2 (redondea) 2 * 30 = 60 min redondeea el servicio
+      const roundedDuration = Math.ceil(originalDuration / 30) * 30;
+
+      const endTime = new Date(startTime.getTime() + roundedDuration * 60000); // + en miliseg
+
+      return {
+        id: appt.id,
+        title: `${appt.services.name} - ${appt.client.full_name}`, 
+        start: startTime, // fecha y hora ini
+        end: endTime,     // Fecha y hora de fin (calculada con el redondeo)
+        extendedProps: {
+          status: appt.status
+        }
+      };
+    });
+  }, [filteredAppointments]);
 
 
   return (
@@ -135,54 +166,27 @@ export default function ProfessionalDashboardPage() {
                 )}
               </div>
             </div>
-            {filteredAppointments.length > 0 ? (
-              <ul className="space-y-4">
-                {filteredAppointments.map((appt) => {
-                  const isPastAppointment = new Date(appt.appointment_time) < new Date();
-                  return (
-                  <li key={appt.id} className="p-4 border rounded-lg flex flex-wrap justify-between items-center">
-                    <div>
-                      <p className="font-bold text-lg">{appt.services.name}</p>
-                      {/*Datos Cliente*/}
-                      <p>Cliente: {appt.client.full_name}</p>
-                      <p>Fecha: {new Date(appt.appointment_time).toLocaleString()}</p>
-                      <p className="capitalize">Estado: <span className="font-semibold">{appt.status}</span></p>
-                    </div>
-                    <div className="flex gap-2 mt-4 sm:mt-0">
-                        {/*Btn para pendientes */}
-                        {appt.status === 'agendada' && (
-                          <>
-                            <button 
-                              onClick={() => handleUpdateStatus(appt.id, 'confirmada')}
-                              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                              Confirmar
-                            </button>
-                            <button 
-                              onClick={() => handleUpdateStatus(appt.id, 'cancelada')}
-                              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                              Cancelar
-                            </button>
-                          </>
-                        )}
-                        {/*btn  marcar como completada */}
-                        {appt.status === 'confirmada' && isPastAppointment && (
-                           <button 
-                              onClick={() => handleUpdateStatus(appt.id, 'completada')}
-                              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                              Marcar como Completada
-                            </button>
-                        )}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p>No tienes ninguna cita agendada.</p>
-            )}
+            {/*Calendario datos reserva */}
+            <div className="mt-4">
+              <FullCalendar
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                }}
+                events={calendarEvents}
+                locale={esLocale}
+                height="auto"
+                eventClick={(info) => {
+                  alert(`Cita: ${info.event.title}\nEstado: ${info.event.extendedProps.status}`);
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
     </PrivateRoute>
-    );
+  );
 }
