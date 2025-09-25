@@ -6,11 +6,15 @@ import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import Modal from '@/components/Modal';
 
 export default function MyAppointmentsPage() {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState(null);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -51,28 +55,37 @@ export default function MyAppointmentsPage() {
   };
 
   //cancelar cita
-  const handleCancelAppointment = async (appointmentId, appointmentTime) => {
-    if (!canCancelAppointment(appointmentTime)) {
-      toast.error('No puedes cancelar una cita con menos de 8 horas de antelación.');
-      return;
-    }
-    if (window.confirm('¿Estás seguro de que quieres cancelar esta cita?')) {
-      const { data, error } = await supabase
-        .from('appointments')
-        .update({ status: 'cancelada' })
-        .eq('id', appointmentId)
-        .select(`id, appointment_time, status, services(name), professional:profiles!appointments_professional_id_fkey(full_name)`)
-        .single();
+  const handleCancelAppointment = async () => {
+    if (!appointmentToCancel) return;
 
-      if (error) {
-        console.error("Error al cancelar la cita:", error);
-        toast.error('Hubo un error al cancelar la cita.');
-      } else {
-        setAppointments(prev => prev.map(appt => appt.id === appointmentId ? data : appt));
-        toast.success('Cita cancelada con éxito.');
-      }
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: 'cancelada' })
+      .eq('id', appointmentToCancel.id)
+      .select('*, services(name), professional:profiles!appointments_professional_id_fkey(full_name)')
+      .single();
+
+    if (error) {
+      console.error("Error al cancelar la cita:", error);
+      toast.error('Hubo un error al cancelar la cita.');
+    } else {
+      setAppointments(prev => prev.map(appt => appt.id === appointmentToCancel.id ? data : appt));
+      toast.success('Cita cancelada con éxito.');
     }
+    closeCancelModal();
   };
+
+  //funciones modal
+  const openCancelModal = (appointment) => {
+    setAppointmentToCancel(appointment);
+    setIsCancelModalOpen(true);
+  };
+
+  const closeCancelModal = () => {
+    setIsCancelModalOpen(false);
+    setAppointmentToCancel(null);
+  };
+  
   // separamos las citas en prox y pasada
   const { upcomingAppointments, pastAppointments } = useMemo(() => {
     const now = new Date();
@@ -108,15 +121,12 @@ export default function MyAppointmentsPage() {
                       <p>Con: {appt.professional.full_name}</p>
                       <p>Fecha: {new Date(appt.appointment_time).toLocaleString()}</p>
                       <p className="capitalize">Estado: <span className="font-semibold">{appt.status}</span></p>
-                      <button onClick={() => handleCancelAppointment(appt.id, appt.appointment_time)}
+                      <button onClick={() => openCancelModal(appt)}
                           disabled={isCancellationDisabled}
                       className={`mt-4 sm:mt-0 font-bold py-2 px-4 rounded-lg transition-colors ${
-                            isCancellationDisabled
-                              ? 'bg-gray-400 cursor-not-allowed'
-                              : 'bg-red-500 hover:bg-red-600 text-white'
+                            isCancellationDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600 text-white'
                           }`}
-                          title={isCancellationDisabled ? "Solo puedes cancelar con más de 8 horas de antelación" : "Cancelar la cita"}
-                        >
+                          title={isCancellationDisabled ? "Solo puedes cancelar con más de 8 horas de antelación" : "Cancelar la cita"}>
                           Cancelar Cita
                     </button>
                     </li>
@@ -149,6 +159,27 @@ export default function MyAppointmentsPage() {
           </div>
         )}
       </div>
+      {appointmentToCancel && (
+        <Modal isOpen={isCancelModalOpen} closeModal={closeCancelModal} title="Confirmar Cancelación">
+          <p className="text-sm text-gray-600">
+            ¿Estás seguro de que quieres cancelar tu cita para 
+            <span className="font-bold"> {appointmentToCancel.services.name}</span> el 
+            <span className="font-bold"> {new Date(appointmentToCancel.appointment_time).toLocaleString('es-ES')}</span>?
+          </p>
+          <div className="mt-6 flex justify-end gap-4">
+            <button
+              onClick={closeCancelModal}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none">
+              No, volver
+            </button>
+            <button
+              onClick={handleCancelAppointment}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none">
+              Sí, cancelar
+            </button>
+          </div>
+        </Modal>
+      )}
     </PrivateRoute>
   );
 }

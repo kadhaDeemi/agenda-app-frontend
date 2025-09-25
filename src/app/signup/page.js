@@ -14,7 +14,8 @@ export default function SignUpPage() {
     event.preventDefault(); // Previene que la pagina se recargue
     setLoading(true);
     setMessage('');
-    console.log('Enviando a Supabase:', { email, password, fullName });
+    //console.log('Enviando a Supabase:', { email, password, fullName });
+    
     // registrarse
     const { data, error } = await supabase.auth.signUp({
       email: email,

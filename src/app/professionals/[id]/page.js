@@ -7,7 +7,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
-
+import Modal from '@/components/Modal';
 
 export default function ProfessionalProfilePage({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -24,6 +24,9 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
 
   const [appointments, setAppointments] = useState([]);
   const [isBooking, setIsBooking] = useState(false);
+
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [bookingDetails, setBookingDetails] = useState(null);
 
   useEffect(() => {
     // Obtene todos los datos
@@ -65,7 +68,7 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
 
       const { data: appointmentsData } = await supabase
         .from('appointments')
-        .select('appointment_time, services(duration)')
+        .select('appointment_time, status ,services(duration)')
         .eq('professional_id', id)
         .gte('appointment_time', startDate.toISOString())
         .lte('appointment_time', endDate.toISOString());
@@ -98,7 +101,9 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
     if (workBlocks.length === 0) return [];
 
     // obt los bloques ya ocupados (reservas)
-    const bookedBlocks = appointments.map(appt => {
+    const bookedBlocks = appointments
+  .filter(appt => appt.status !== 'cancelada')
+  .map(appt => {
       const startTime = new Date(appt.appointment_time);
       const endTime = new Date(startTime.getTime() + appt.services.duration * 60000);
       return {
@@ -147,7 +152,34 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   }, [selectedService, selectedDate, schedules, overrides, appointments]);
 
   // funcion para agendar
-  const handleBooking = async (time) => {
+  const handleBooking = async () => {
+    if (!bookingDetails) return;
+    
+    setIsBooking(true);
+    closeBookingModal();
+    
+    const { error } = await supabase.from('appointments').insert({
+      client_id: clientUser.id,
+      professional_id: profile.id,
+      service_id: selectedService.id,
+      appointment_time: bookingDetails.appointmentDateTime.toISOString(),
+      status: 'agendada'
+    });
+    
+    if (error) {
+      toast.error('Hubo un error al agendar tu cita: ' + error.message);
+    } else {
+      toast.success('¡Cita agendada con éxito!');
+      setAppointments(prev => [...prev, {
+        appointment_time: bookingDetails.appointmentDateTime.toISOString(),
+        services: { duration: selectedService.duration }
+      }]);
+    }
+    setIsBooking(false);
+  };
+
+  // funcionees modal
+  const openBookingModal = (time) => {
     if (!clientUser) {
       toast('Por favor, inicia sesión para agendar una cita.');
       return;
@@ -156,33 +188,17 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
       toast('Por favor, selecciona un servicio primero.');
       return;
     }
-    
     const [hours, minutes] = time.split(':');
     const appointmentDateTime = new Date(selectedDate);
     appointmentDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
     
-    if (window.confirm(`¿Confirmas tu cita para ${selectedService.name} el ${appointmentDateTime.toLocaleString()}?`)) {
-      setIsBooking(true);
-      
-      const { error } = await supabase.from('appointments').insert({
-        client_id: clientUser.id,
-        professional_id: profile.id,
-        service_id: selectedService.id,
-        appointment_time: appointmentDateTime.toISOString(),
-      });
-      
-      if (error) {
-        toast.error('Hubo un error al agendar tu cita: ' + error.message);
-      } else {
-        toast.success('¡Cita agendada con éxito!');
-        // Actualiza la lista de citas
-        setAppointments(prev => [...prev, {
-  appointment_time: appointmentDateTime.toISOString(),
-  services: { duration: selectedService.duration }
-}]);
-      }
-      setIsBooking(false);
-    }
+    setBookingDetails({ time, appointmentDateTime });
+    setIsBookingModalOpen(true);
+  };
+
+  const closeBookingModal = () => {
+    setIsBookingModalOpen(false);
+    setBookingDetails(null);
   };
 
   if (loading) {
@@ -234,7 +250,7 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
               ) : availableTimes.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
                 {availableTimes.map(time => (
-                  <button key={time} onClick={() => handleBooking(time)} disabled={isBooking} className="p-2 border rounded-lg hover:bg-blue-500 hover:text-white">{time}</button>
+                  <button key={time} onClick={() => openBookingModal(time)} disabled={isBooking} className="p-2 border rounded-lg hover:bg-blue-500 hover:text-white disabled:bg-gray-200">{time}</button>
                 ))}
               </div>
             ) : (
@@ -243,6 +259,24 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
           </div>
         </div>
       </div>
+      {bookingDetails && (
+        <Modal isOpen={isBookingModalOpen} closeModal={closeBookingModal} title="Confirmar Cita">
+          <p className="text-sm text-gray-600">
+            ¿Deseas confirmar tu cita para 
+            <span className="font-bold"> {selectedService.name}</span> con 
+            <span className="font-bold"> {profile.full_name}</span> el 
+            <span className="font-bold"> {bookingDetails.appointmentDateTime.toLocaleString('es-ES')}</span>?
+          </p>
+          <div className="mt-6 flex justify-end gap-4">
+            <button onClick={closeBookingModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none">
+              Cancelar
+            </button>
+            <button onClick={handleBooking} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none">
+              Confirmar
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

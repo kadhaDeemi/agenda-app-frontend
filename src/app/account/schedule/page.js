@@ -7,6 +7,7 @@ import PrivateRoute from '@/components/PrivateRoute';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import toast from 'react-hot-toast';
+import Modal from '@/components/Modal';
 
 const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -25,6 +26,8 @@ export default function ManageSchedulePage() {
   const [schedules, setSchedules] = useState([]);
   const [overrides, setOverrides] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
 
   //states para el formulario de nuevo horario 
   const [day, setDay] = useState(1); // 1: lunes
@@ -99,18 +102,6 @@ export default function ManageSchedulePage() {
     }
   };
 
-  const handleDeleteSchedule = async (scheduleId) => {
-    if (window.confirm('¿Seguro que quieres eliminar este horario?')) {
-      const { error } = await supabase.from('work_schedules').delete().eq('id', scheduleId);
-      if (error) {
-        toast.error('Error al eliminar el horario: ' + error.message);
-      } else {
-        setSchedules(schedules.filter(s => s.id !== scheduleId));
-        toast.success('Horario eliminado.');
-      }
-    }
-  };
-
   const handleAddOverride = async () => {
     if (!overrideDate) {
       toast('Por favor, selecciona una fecha.');
@@ -132,17 +123,40 @@ export default function ManageSchedulePage() {
     }
   };
 
-  const handleDeleteOverride = async (overrideId) => {
-    if(window.confirm('¿Seguro que quieres eliminar este día libre?')){
-      const { error } = await supabase.from('schedule_overrides').delete().eq('id', overrideId);
-      if (error) {
-        toast.error('Error al eliminar el día libre: ' + error.message);
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+
+    const { type, id } = itemToDelete;
+    const table = type === 'schedule' ? 'work_schedules' : 'schedule_overrides';
+    const successMessage = type === 'schedule' ? 'Horario eliminado.' : 'Día libre eliminado.';
+    const errorMessage = type === 'schedule' ? 'Error al eliminar el horario.' : 'Error al eliminar el día libre.';
+    
+    const { error } = await supabase.from(table).delete().eq('id', id);
+
+    if (error) {
+      toast.error(errorMessage + ': ' + error.message);
+    } else {
+      if (type === 'schedule') {
+        setSchedules(prev => prev.filter(s => s.id !== id));
       } else {
-        setOverrides(overrides.filter(o => o.id !== overrideId));
-        toast.success('Día libre eliminado.');
+        setOverrides(prev => prev.filter(o => o.id !== id));
       }
+      toast.success(successMessage);
     }
+    closeDeleteModal();
   };
+  
+  //funciones modal
+  const openDeleteModal = (id, type, description) => {
+    setItemToDelete({ id, type, description });
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
+  };
+
 
   useEffect(() => {
     const filtered = schedules.filter(s => s.day_of_week === day);
@@ -231,7 +245,7 @@ export default function ManageSchedulePage() {
                         <span className="font-bold">{daysOfWeek[s.day_of_week]}: </span>
                         <span>de {s.start_time.substring(0, 5)} a {s.end_time.substring(0, 5)}</span>
                       </div>
-                      <button onClick={() => handleDeleteSchedule(s.id)} className="text-red-500 hover:text-red-700 font-semibold">Eliminar</button>
+                      <button onClick={() => openDeleteModal(s.id, 'schedule', `${daysOfWeek[s.day_of_week]} de ${s.start_time.substring(0, 5)} a ${s.end_time.substring(0, 5)}`)} className="text-red-500 hover:text-red-700 font-semibold">Eliminar</button>
                     </div>
                   )) : <p>No has definido ningún horario semanal.</p>}
                 </div>
@@ -256,7 +270,7 @@ export default function ManageSchedulePage() {
                   {overrides.length > 0 ? overrides.map(o => (
                     <div key={o.id} className="p-3 bg-gray-50 rounded-md flex justify-between items-center">
                       <span>{new Date(o.override_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })} - No Laborable</span>
-                      <button onClick={() => handleDeleteOverride(o.id)} className="text-red-500 hover:text-red-700 font-semibold">Eliminar</button>
+                      <button onClick={() => openDeleteModal(o.id, 'override', new Date(o.override_date).toLocaleDateString('es-ES', {dateStyle: 'full', timeZone: 'UTC'}))} className="text-red-500 hover:text-red-700 font-semibold">Eliminar</button>
                     </div>
                   )) : <p>No tienes días libres definidos.</p>}
                 </div>
@@ -265,6 +279,22 @@ export default function ManageSchedulePage() {
           </div>
         </div>
       </div>
+      {itemToDelete && (
+        <Modal isOpen={isDeleteModalOpen} closeModal={closeDeleteModal} title="Confirmar Eliminación">
+          <p className="text-sm text-gray-600">
+            ¿Estás seguro de que quieres eliminar 
+            <span className="font-bold"> {itemToDelete.description}</span>? Esta acción no se puede deshacer.
+          </p>
+          <div className="mt-6 flex justify-end gap-4">
+            <button onClick={closeDeleteModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200">
+              No, volver
+            </button>
+            <button onClick={handleConfirmDelete} className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">
+              Sí, eliminar
+            </button>
+          </div>
+        </Modal>
+      )}
     </PrivateRoute>
   );
 }

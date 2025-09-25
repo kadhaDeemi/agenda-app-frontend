@@ -13,6 +13,9 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import esLocale from '@fullcalendar/core/locales/es';
+import Modal from '@/components/Modal';
+
+
 
 export default function ProfessionalDashboardPage() {
   const { user } = useAuth();
@@ -21,6 +24,10 @@ export default function ProfessionalDashboardPage() {
   const [statusFilter, setStatusFilter] = useState('todas');
   const [dateRange, setDateRange] = useState(undefined);
   const [showCalendar, setShowCalendar] = useState(false);
+
+  //modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -53,27 +60,19 @@ export default function ProfessionalDashboardPage() {
 
     // cambiar estado de la reserva
     const handleUpdateStatus = async (appointmentId, newStatus) => {
-    const confirmationText = {
-      'confirmada': '¿Estás seguro de que quieres confirmar esta cita?',
-      'cancelada': '¿Estás seguro de que quieres cancelar esta cita?',
-      'completada': '¿Marcar esta cita como completada? Esta acción es final.'
-    }[newStatus];
+    closeModal(); // Cierra el modal antes de procesar
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: newStatus })
+      .eq('id', appointmentId)
+      .select(`*, services(name, duration), client:profiles!appointments_client_id_fkey(full_name)`)
+      .single();
 
-    if (window.confirm(confirmationText)) {
-      const { data, error } = await supabase
-        .from('appointments')
-        .update({ status: newStatus })
-        .eq('id', appointmentId)
-        .select(`id, appointment_time, status, services(name), client:profiles!appointments_client_id_fkey(full_name)`)
-        .single();
-
-      if (error) {
-        //console.error('Error updating appointment status:', error);
-        toast.error('Hubo un error al actualizar la cita.');
-      } else {
-        setAppointments(prev => prev.map(appt => appt.id === appointmentId ? data : appt));
-        toast.success(`Cita actualizada a "${newStatus}" con éxito.`);
-      }
+    if (error) {
+      toast.error('Hubo un error al actualizar la cita.');
+    } else {
+      setAppointments(prev => prev.map(appt => appt.id === appointmentId ? data : appt));
+      toast.success(`Cita actualizada a "${newStatus}" con éxito.`);
     }
   };
 
@@ -103,27 +102,40 @@ export default function ProfessionalDashboardPage() {
 
   // Transforma las citas a eventos en el calendario
   const calendarEvents = useMemo(() => {
-    return filteredAppointments.map(appt => {
-      const startTime = new Date(appt.appointment_time);
-      const originalDuration = appt.services.duration;
-      // Redondea la duracion del servicio
-      // divide por 30 y redondea el servicio. ej: servicio dura 45 min = 45/30 = 1.5 = 2 (redondea) 2 * 30 = 60 min redondeea el servicio
-      const roundedDuration = Math.ceil(originalDuration / 30) * 30;
-
-      const endTime = new Date(startTime.getTime() + roundedDuration * 60000); // + en miliseg
-
-      return {
-        id: appt.id,
-        title: `${appt.services.name} - ${appt.client.full_name}`, 
-        start: startTime, // fecha y hora ini
-        end: endTime,     // Fecha y hora de fin (calculada con el redondeo)
-        extendedProps: {
-          status: appt.status
-        }
-      };
-    });
+    return filteredAppointments.map(appt => ({
+      id: appt.id,
+      title: `${appt.services.name} - ${appt.client.full_name}`,
+      start: new Date(appt.appointment_time),
+      end: new Date(new Date(appt.appointment_time).getTime() + (Math.ceil(appt.services.duration / 30) * 30) * 60000),
+      extendedProps: { status: appt.status },
+      backgroundColor: { 'agendada': '#3B82F6', 'confirmada': '#10B981', 'completada': '#6B7280', 'cancelada': '#EF4444' }[appt.status],
+      borderColor: { 'agendada': '#2563EB', 'confirmada': '#059669', 'completada': '#4B5563', 'cancelada': '#DC2626' }[appt.status],
+    }));
   }, [filteredAppointments]);
 
+  //funciones modal
+  function closeModal() {
+    setIsModalOpen(false);
+    setSelectedEvent(null);
+  }
+
+  function openModal(event) {
+    setSelectedEvent(event);
+    setIsModalOpen(true);
+  }
+
+  const handleEventClick = (info) => {
+    const { id, title, extendedProps, start } = info.event;
+    const isPastAppointment = new Date(start) < new Date();
+    
+    openModal({
+      id,
+      title,
+      status: extendedProps.status,
+      start,
+      isPastAppointment
+    });
+  };
 
   return (
     <PrivateRoute requiredRole="profesional">
@@ -169,24 +181,58 @@ export default function ProfessionalDashboardPage() {
             {/*Calendario datos reserva */}
             <div className="mt-4">
               <FullCalendar
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView="timeGridWeek"
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} initialView="timeGridWeek"
                 headerToolbar={{
                   left: 'prev,next today',
                   center: 'title',
                   right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 }}
-                events={calendarEvents}
-                locale={esLocale}
-                height="auto"
-                eventClick={(info) => {
-                  alert(`Cita: ${info.event.title}\nEstado: ${info.event.extendedProps.status}`);
-                }}
-              />
+                events={calendarEvents} locale={esLocale} height="auto" eventClick={handleEventClick}/>
             </div>
           </div>
         )}
       </div>
+      {selectedEvent && (
+        <Modal isOpen={isModalOpen} closeModal={closeModal} title="Detalles de la Cita">
+          <p className="text-lg font-semibold text-gray-800">{selectedEvent.title}</p>
+          <p className="text-sm text-gray-600">
+            {selectedEvent.start.toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'short' })}
+          </p>
+          <p className="text-sm text-gray-600 capitalize">
+            Estado: <span className="font-bold">{selectedEvent.status}</span>
+          </p>
+
+          <div className="mt-6 flex flex-col gap-3">
+            {selectedEvent.status === 'agendada' && (
+              <>
+                <button
+                  onClick={() => handleUpdateStatus(selectedEvent.id, 'confirmada')}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 focus:outline-none">
+                  Confirmar Cita
+                </button>
+                <button
+                  onClick={() => handleUpdateStatus(selectedEvent.id, 'cancelada')}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 focus:outline-none">
+                  Cancelar Cita
+                </button>
+              </>
+            )}
+            
+            {selectedEvent.status === 'confirmada' && selectedEvent.isPastAppointment && (
+              <button
+                onClick={() => handleUpdateStatus(selectedEvent.id, 'completada')}
+                className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 focus:outline-none">
+                Marcar como Completada
+              </button>
+            )}
+            <button
+              onClick={closeModal}
+              className="mt-2 w-full inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+              Cerrar
+            </button>
+          </div>
+        </Modal>
+      )}
     </PrivateRoute>
   );
 }

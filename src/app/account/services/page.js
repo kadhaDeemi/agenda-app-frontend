@@ -6,11 +6,15 @@ import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import toast from 'react-hot-toast';
 import { Edit, Trash2 } from 'lucide-react';
+import Modal from '@/components/Modal';
 
 export default function ManageServicesPage() {
   const { user } = useAuth();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState(''); // 'edit' o 'delete'
+  const [selectedService, setSelectedService] = useState(null);
 
   // Estados para el form
   const [name, setName] = useState('');
@@ -19,9 +23,6 @@ export default function ManageServicesPage() {
   const [price, setPrice] = useState('');
   const [formMessage, setFormMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [editingServiceId, setEditingServiceId] = useState(null); 
-  const [editFormData, setEditFormData] = useState({ name: '', description: '', duration: '', price: '' });
 
 
   // Funcion para obtener los servicios
@@ -86,149 +87,93 @@ export default function ManageServicesPage() {
     setIsSubmitting(false);
   };
 
-  // Funcion eliminar servicio
-  const handleDelete = async (serviceId) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este servicio? Esta acción no se puede deshacer.')) {
-      // elimina el serivcio en la bbdd
-      const { error } = await supabase
-        .from('services')
-        .delete()
-        .eq('id', serviceId);
+  //funcoines modal
 
-      if (error) {
-        toast.error('Error al eliminar el servicio: ' + error.message);
-      } else {
-        //actualiza los servicios en la pantalla
-        setServices(services.filter(service => service.id !== serviceId));
-        toast.success('Servicio eliminado con éxito.');
-      }
-    }
+  const openModal = (mode, service) => {
+    setModalMode(mode);
+    setSelectedService(service);
+    setIsModalOpen(true);
   };
 
-  //funcion editar
-  const handleEditClick = (service) => {
-    setEditingServiceId(service.id);
-    setEditFormData({
-      name: service.name,
-      description: service.description || '',
-      duration: service.duration,
-      price: service.price,
-    });
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setModalMode('');
+    setSelectedService(null);
   };
-
-  //funcion q se ejecuta al modificar un campo del formulario
-  const handleEditFormChange = (event) => {
+  const handleModalFormChange = (event) => {
     const { name, value } = event.target;
-    setEditFormData(prevData => ({ ...prevData, [name]: value }));
+    setSelectedService(prev => ({ ...prev, [name]: value }));
+  };
+  
+  
+  const handleDelete = async () => {
+    if (!selectedService) return;
+    const { error } = await supabase.from('services').delete().eq('id', selectedService.id);
+
+    if (error) {
+      toast.error('Error al eliminar el servicio: ' + error.message);
+    } else {
+      setServices(services.filter(service => service.id !== selectedService.id));
+      toast.success('Servicio eliminado con éxito.');
+    }
+    closeModal();
   };
 
-  //editar lo servicios
   const handleUpdate = async (event) => {
     event.preventDefault();
+    if (!selectedService) return;
     setIsSubmitting(true);
 
     const { error } = await supabase
       .from('services')
       .update({
-        name: editFormData.name,
-        description: editFormData.description,
-        duration: parseInt(editFormData.duration, 10),
-        price: parseFloat(editFormData.price),
+        name: selectedService.name,
+        description: selectedService.description,
+        duration: parseInt(selectedService.duration, 10),
+        price: parseFloat(selectedService.price),
       })
-      .eq('id', editingServiceId);
+      .eq('id', selectedService.id)
+      .select()
+      .single();
 
     if (error) {
       toast.error('Error al actualizar el servicio: ' + error.message);
     } else {
-      setServices(services.map(s => s.id === editingServiceId ? { ...s, ...editFormData } : s));
-      setEditingServiceId(null);
+      // Usamos el 'data' devuelto para asegurar consistencia
+      setServices(services.map(s => s.id === selectedService.id ? selectedService : s));
       toast.success('Servicio actualizado con éxito.');
     }
     setIsSubmitting(false);
-  };
-  
-  //cancela el editar
-  const handleCancelEdit = () => {
-    setEditingServiceId(null);
+    closeModal();
   };
 
   return (
     <PrivateRoute requiredRole="profesional">
       <div className="container mx-auto px-6 py-8">
         <h1 className="text-3xl font-bold mb-6">Gestionar mis Servicios</h1>
-
-        {/* Formulario add servicios */}
+        
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
           <h2 className="text-2xl font-bold mb-4">Añadir Nuevo Servicio</h2>
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                placeholder="Nombre del Servicio (ej: Corte de Pelo)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-                required/>
-              <input
-                type="number"
-                placeholder="Duración (en minutos)"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-                required/>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Precio"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-                required/>
-              <textarea
-                placeholder="Descripción (opcional)"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg md:col-span-2"
-                rows="3"/>
+              <input type="text" placeholder="Nombre del Servicio" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border rounded-lg" required/>
+              <input type="number" placeholder="Duración (en minutos)" value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full px-3 py-2 border rounded-lg" required/>
+              <input type="number" step="0.01" placeholder="Precio" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full px-3 py-2 border rounded-lg" required/>
+              <textarea placeholder="Descripción (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-3 py-2 border rounded-lg md:col-span-2" rows="3"/>
             </div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-4 w-full md:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300">
+            <button type="submit" disabled={isSubmitting} className="mt-4 w-full md:w-auto bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300">
               {isSubmitting ? 'Guardando...' : 'Guardar Servicio'}
             </button>
-            {formMessage && <p className="mt-4 text-sm">{formMessage}</p>}
           </form>
         </div>
 
-        {/*lista servicios*/}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-2xl font-bold mb-4">Mis Servicios Actuales</h2>
-          {loading ? ( <p>Cargando servicios...</p> ) : 
-           services.length > 0 ? (
-            <ul className="space-y-4">
-              {services.map((service) => (
-                <li key={service.id} className="p-4 border rounded-lg">
-                  {editingServiceId === service.id ? (
-                    // Editar servicios
-                    <form onSubmit={handleUpdate}>
-                      <input type="text" name="name" value={editFormData.name} onChange={handleEditFormChange} className="w-full p-2 border rounded mb-2" />
-                      <textarea name="description" value={editFormData.description} onChange={handleEditFormChange} className="w-full p-2 border rounded mb-2" />
-                      <div className="flex gap-4 mb-4">
-                        <input type="number" name="duration" value={editFormData.duration} onChange={handleEditFormChange} className="w-full p-2 border rounded" placeholder="Duración (min)" />
-                        <input type="number" step="0.01" name="price" value={editFormData.price} onChange={handleEditFormChange} className="w-full p-2 border rounded" placeholder="Precio" />
-                      </div>
-                      <div className="flex space-x-2">
-                        <button type="submit" disabled={isSubmitting} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-sm">
-                          {isSubmitting ? 'Guardando...' : 'Guardar'}
-                        </button>
-                        <button type="button" onClick={handleCancelEdit} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm">
-                          Cancelar
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    // Divs servicios
+          {loading ? (<p>Cargando servicios...</p>) : 
+            services.length > 0 ? (
+              <ul className="space-y-4">
+                {services.map((service) => (
+                  <li key={service.id} className="p-4 border rounded-lg">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
                       <div className="mb-4 md:mb-0">
                         <h3 className="font-semibold text-lg">{service.name}</h3>
@@ -239,23 +184,50 @@ export default function ManageServicesPage() {
                         </div>
                       </div>
                       <div className="flex space-x-2 mt-2 md:mt-0">
-                        <button onClick={() => handleEditClick(service)} className="flex items-center bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded text-sm">
-                          <Edit className="w-4 h-4 mr-2" />
-                          Editar
-                        </button>
-                        <button onClick={() => handleDelete(service.id)} className="flex items-center bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm">
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Eliminar
-                        </button>
+                        <button onClick={() => openModal('edit', service)} className="flex items-center bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded text-sm"><Edit className="w-4 h-4 mr-2" /> Editar</button>
+                        <button onClick={() => openModal('delete', service)} className="flex items-center bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm"><Trash2 className="w-4 h-4 mr-2" /> Eliminar</button>
                       </div>
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : ( <p>Aún no has añadido ningún servicio.</p> )}
+                  </li>
+                ))}
+              </ul>
+            ) : (<p>Aún no has añadido ningún servicio.</p>)
+          }
         </div>
       </div>
+
+      <Modal isOpen={isModalOpen} closeModal={closeModal} title={modalMode === 'edit' ? 'Editar Servicio' : 'Confirmar Eliminación'}>
+        {modalMode === 'edit' && selectedService ? (
+          <form onSubmit={handleUpdate}>
+            <label className="block text-sm font-medium text-gray-700">Nombre</label>
+            <input type="text" name="name" value={selectedService.name} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded mb-2" />
+            <label className="block text-sm font-medium text-gray-700">Descripción</label>
+            <textarea name="description" value={selectedService.description || ''} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded mb-2" />
+            <div className="flex gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Duración (min)</label>
+                <input type="number" name="duration" value={selectedService.duration} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Precio</label>
+                <input type="number" step="0.01" name="price" value={selectedService.price} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded" />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2 mt-4">
+              <button type="button" onClick={closeModal} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded text-sm">Cancelar</button>
+              <button type="submit" disabled={isSubmitting} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-sm">{isSubmitting ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </form>
+        ) : modalMode === 'delete' && selectedService ? (
+          <div>
+            <p>¿Estás seguro de que quieres eliminar el servicio <strong>{selectedService.name}</strong>? Esta acción no se puede deshacer.</p>
+            <div className="mt-6 flex justify-end gap-4">
+              <button onClick={closeModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200">No, volver</button>
+              <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">Sí, eliminar</button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </PrivateRoute>
   );
 }
