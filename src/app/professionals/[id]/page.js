@@ -8,6 +8,7 @@ import 'react-day-picker/dist/style.css';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
 import Modal from '@/components/Modal';
+import StarDisplay from '@/components/StarDisplay';
 
 export default function ProfessionalProfilePage({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -21,12 +22,12 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedService, setSelectedService] = useState(null);
-
   const [appointments, setAppointments] = useState([]);
   const [isBooking, setIsBooking] = useState(false);
 
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingDetails, setBookingDetails] = useState(null);
+  const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
     // Obtene todos los datos
@@ -37,17 +38,20 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
         { data: servicesData },
         { data: schedulesData },
         { data: overridesData },
+        { data: reviewsData },
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', id).single(),
         supabase.from('services').select('*').eq('professional_id', id),
         supabase.from('work_schedules').select('*').eq('professional_id', id),
         supabase.from('schedule_overrides').select('*').eq('professional_id', id),
+        supabase.from('reviews').select('*, client:client_id(full_name, avatar_url)').eq('professional_id', id)
       ]);
       
       setProfile(profileData);
       setServices(servicesData || []);
       setSchedules(schedulesData || []);
       setOverrides(overridesData || []);
+      setReviews(reviewsData || []);
       setLoading(false);
     }
 
@@ -164,7 +168,9 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
       service_id: selectedService.id,
       appointment_time: bookingDetails.appointmentDateTime.toISOString(),
       status: 'agendada'
-    });
+    })
+    .select('*, services(duration)')
+    .single();
     
     if (error) {
       toast.error('Hubo un error al agendar tu cita: ' + error.message);
@@ -201,6 +207,12 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
     setBookingDetails(null);
   };
 
+  const averageRating = useMemo(() => {
+    if (reviews.length === 0) return 0;
+    const total = reviews.reduce((acc, review) => acc + review.rating, 0);
+    return (total / reviews.length).toFixed(1); // Redondeamos a 1 decimal
+  }, [reviews]);
+
   if (loading) {
     return <div className="container mx-auto px-6 py-8 text-center">Cargando perfil...</div>;
   }
@@ -215,11 +227,19 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   }
 
   return (
+    <>
     <div className="container mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
       {/*column izq: perfil y servicios */}
       <div className="md:col-span-1 space-y-8">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h1 className="text-4xl font-bold mb-2">{profile.full_name}</h1>
+          {reviews.length > 0 && (
+              <div className="flex items-center gap-2 mb-4">
+                <StarDisplay rating={averageRating} />
+                <span className="font-bold text-lg">{averageRating}</span>
+                <span className="text-gray-600">({reviews.length} opiniones)</span>
+              </div>
+            )}
           <p className="text-lg text-gray-600">Rol: {profile.role}</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-md">
@@ -259,6 +279,28 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
           </div>
         </div>
       </div>
+      {reviews.length > 0 && (
+        <div className="container mx-auto px-6 py-8">
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h2 className="text-2xl font-bold mb-6">Opiniones de Clientes</h2>
+            <ul className="space-y-6">
+              {reviews.map(review => (
+                <li key={review.id} className="border-b pb-6 last:border-b-0">
+                  <div className="flex items-center mb-2">
+                    {/* Aquí podrías mostrar el avatar del cliente */}
+                    <div className="font-bold mr-4">{review.client.full_name}</div>
+                    <StarDisplay rating={review.rating} />
+                  </div>
+                  <p className="text-gray-600">{review.comment}</p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    {new Date(review.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       {bookingDetails && (
         <Modal isOpen={isBookingModalOpen} closeModal={closeBookingModal} title="Confirmar Cita">
           <p className="text-sm text-gray-600">
@@ -278,5 +320,6 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
         </Modal>
       )}
     </div>
+    </>
   );
 }
