@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Navbar() {
-  const { user } = useAuth(); // Obtiene el usuario
+  const { user, profile } = useAuth(); // Obtiene el usuario
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -25,6 +25,11 @@ export default function Navbar() {
           {user ? (
             // Si hay un usuario logueado
             <div className="flex items-center">
+              {profile?.role === 'administrador' && (
+                <Link href="/admin" className="text-gray-800 hover:text-blue-600 mr-4 font-semibold">
+                  Panel Admin
+                </Link>
+              )}
               <Link href="/account" className="text-gray-800 hover:text-blue-600 mr-4">
                 Mi Cuenta
               </Link>
