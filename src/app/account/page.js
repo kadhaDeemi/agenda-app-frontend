@@ -11,47 +11,64 @@ export default function AccountPage() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    // sirve para cerrar sesion del usuario
     await supabase.auth.signOut();
-    // manda al usuario al inicio
     router.push('/');
   };
 
   return (
     <PrivateRoute>
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <div className="p-8 bg-white shadow-md rounded-lg text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">
-          ¡Bienvenido a tu cuenta!
-        </h1>
-        <p className="text-gray-600 mb-6">
-          Esta es tu página personal. Desde aquí podrás gestionar tus citas.
-        </p>
-        <div className="space-y-4">
-            {profile?.role === 'profesional' && (
-              <>
-              <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
-                Gestionar mis Servicios
-              </Link>
-              <Link href="/account/schedule" className="block w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg">
-                  Gestionar mi Horario
-                </Link>
-              <Link href="/account/dashboard" className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                  Ver mi Agenda de Citas
-              </Link>
-              </>
-            )}
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="p-8 bg-white shadow-md rounded-lg text-center w-full max-w-md">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">
+            ¡Bienvenido a tu cuenta!
+          </h1>
+          <p className="text-gray-600 mb-6">
+            Esta es tu página personal. Desde aquí podrás gestionar tus citas.
+          </p>
+          <div className="space-y-4">
+            
+            {/* Lógica para Clientes (sin cambios) */}
             {profile?.role === 'cliente' && (
-              <Link href="/account/my-appointments" className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+              <Link href="/account/my-appointments" className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg">
                 Ver Mis Citas
               </Link>
             )}
+
+            {/* Lógica para Profesionales y Administradores */}
+            {profile?.role === 'profesional' && (
+              <>
+                {/* Estos enlaces solo para profesionales INDEPENDIENTES */}
+                {profile.local_id === null && (
+                  <>
+                    <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg">
+                      Gestionar mis Servicios
+                    </Link>
+                    <Link href="/account/schedule" className="block w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">
+                      Gestionar mi Horario
+                    </Link>
+                  </>
+                )}
+
+                {/* Este enlace para TODOS los profesionales */}
+                <Link href="/account/dashboard" className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg">
+                  Ver mi Agenda de Citas
+                </Link>
+              </>
+            )}
+            
+            {/* Lógica para Administradores (ya la tenías en la Navbar, pero es bueno tenerla aquí también) */}
+            {profile?.role === 'administrador' && (
+              <Link href="/admin" className="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg">
+                Panel de Administración
+              </Link>
+            )}
+
             <button onClick={handleLogout} className="block w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
               Cerrar Sesión
             </button>
           </div>
+        </div>
       </div>
-    </div>
     </PrivateRoute>
   );
 }

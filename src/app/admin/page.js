@@ -369,7 +369,7 @@ return (
                 {professionals.length > 0 ? professionals.map(prof => (
                   <div key={prof.id} className="p-3 bg-gray-50 rounded-md flex justify-between items-center">
                     <span>{prof.full_name}</span>
-                    <button onClick={() => handleRemoveProfessional(prof.id)} className="p-1 text-red-500 hover:bg-red-100 rounded-full">
+                    <button onClick={() => openProfModal(prof)} className="p-1 text-red-500 hover:bg-red-100 rounded-full">
                       <X size={16} />
                     </button>
                   </div>
