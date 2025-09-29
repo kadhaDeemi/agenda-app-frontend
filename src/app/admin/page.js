@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import toast from 'react-hot-toast';
 import Modal from '@/components/Modal';
-import { Edit, Trash2, UserPlus, X } from 'lucide-react';
+import { Edit, Trash2, UserPlus, X, Settings } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 
@@ -39,6 +39,11 @@ export default function AdminDashboardPage() {
   const [duration, setDuration] = useState('');
   const [price, setPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  //Estados para el modal de asignación de servicios
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [professionalToAssign, setProfessionalToAssign] = useState(null);
+  const [assignedServices, setAssignedServices] = useState(new Set());
   
   // Estados para el Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,7 +71,7 @@ export default function AdminDashboardPage() {
           setLocal(localData);
           const [ { data: servicesData }, { data: professionalsData } ] = await Promise.all([
             supabase.from('services').select('*').eq('local_id', localData.id).order('name'),
-            supabase.from('profiles').select('*').eq('local_id', localData.id).eq('role', 'profesional')
+            supabase.from('profiles').select('*, professional_services(service_id)').eq('local_id', localData.id).eq('role', 'profesional')
           ]);
           setServices(servicesData || []);
           setProfessionals(professionalsData || []);
@@ -269,6 +274,7 @@ export default function AdminDashboardPage() {
     setIsSubmitting(false);
   };
 
+  //elimnar
   const handleDelete = async () => {
     if (!selectedService) return;
     const { error } = await supabase.from('services').delete().eq('id', selectedService.id);
@@ -280,6 +286,7 @@ export default function AdminDashboardPage() {
     closeModal();
   };
 
+  //editar
   const handleUpdate = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -300,7 +307,59 @@ export default function AdminDashboardPage() {
   };
 
 
-  //funcion para calcular horas del horario dispo dinamico
+   //ASIGNAR SERVICIOS
+  const openAssignModal = (professional) => {
+    setProfessionalToAssign(professional);
+    const currentServices = new Set(professional.professional_services.map(ps => ps.service_id));
+    setAssignedServices(currentServices);
+    setIsAssignModalOpen(true);
+  };
+  const closeAssignModal = () => setIsAssignModalOpen(false);
+
+  const handleCheckboxChange = (serviceId) => {
+    const newAssignedServices = new Set(assignedServices);
+    if (newAssignedServices.has(serviceId)) {
+      newAssignedServices.delete(serviceId);
+    } else {
+      newAssignedServices.add(serviceId);
+    }
+    setAssignedServices(newAssignedServices);
+  };
+
+  //funcion editar asignaciones e servicio
+  const handleUpdateAssignedServices = async () => {
+    const { error: deleteError } = await supabase.from('professional_services').delete().eq('professional_id', professionalToAssign.id);
+    if (deleteError) {
+      toast.error('Error al actualizar: ' + deleteError.message);
+      return;
+    }
+    const newLinks = Array.from(assignedServices).map(serviceId => ({
+      professional_id: professionalToAssign.id,
+      service_id: serviceId,
+    }));
+    if (newLinks.length > 0) {
+      const { error: insertError } = await supabase.from('professional_services').insert(newLinks);
+      if (insertError) {
+        toast.error('Error al guardar: ' + insertError.message);
+        return;
+      }
+    }
+    const newProfessionalServices = newLinks.map(link => ({ service_id: link.service_id }));
+    setProfessionals(prevProfessionals =>
+        prevProfessionals.map(prof =>
+            prof.id === professionalToAssign.id
+                ? { ...prof, professional_services: newProfessionalServices }
+                : prof
+        )
+    );
+    
+    toast.success('Servicios asignados con éxito.');
+    closeAssignModal();
+  };
+
+
+
+  //funcion para calcular horas del horario disponi
   const availableStartTimeSlots = useMemo(() => {
     const schedulesForDay = professionalSchedules.filter(s => s.day_of_week === scheduleForm.day);
     return baseTimeSlots.filter(slot => !schedulesForDay.some(schedule => slot >= schedule.start_time && slot < schedule.end_time));
@@ -349,8 +408,19 @@ return (
                   {isSubmitting ? 'Guardando...' : 'Guardar Servicio'}
                 </button>
               </form>
+              <h3 className="font-semibold text-lg mb-2 mt-4">Servicios Actuales</h3>
+              <ul className="space-y-2">
+                {services.map((service) => (
+                  <li key={service.id} className="p-3 bg-gray-50 rounded-md flex justify-between items-center">
+                    <div><p className="font-semibold">{service.name}</p><p className="text-sm text-gray-600">${service.price} - {service.duration} min</p></div>
+                    <div className="flex space-x-2"><button onClick={() => openModal('edit', service)} className="p-2 hover:bg-gray-200 rounded-full"><Edit size={18} /></button>
+                    <button onClick={() => openModal('delete', service)} className="p-2 hover:bg-gray-200 rounded-full"><Trash2 size={18} /></button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-            {/* NUEVA SECCIÓN: Gestionar Equipo */}
+            {/* Gestionar Equipo */}
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-2xl font-bold mb-4">Gestionar Equipo de {local.name}</h2>
               
@@ -369,9 +439,14 @@ return (
                 {professionals.length > 0 ? professionals.map(prof => (
                   <div key={prof.id} className="p-3 bg-gray-50 rounded-md flex justify-between items-center">
                     <span>{prof.full_name}</span>
-                    <button onClick={() => openProfModal(prof)} className="p-1 text-red-500 hover:bg-red-100 rounded-full">
-                      <X size={16} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openAssignModal(prof)} className="p-2 text-gray-600 hover:bg-gray-200 rounded-full" title="Asignar Servicios">
+                        <Settings size={16} />
+                      </button>
+                      <button onClick={() => openProfModal(prof)} className="p-1 text-red-500 hover:bg-red-100 rounded-full" title="Remover del Local">
+                        <X size={16} />
+                      </button>
+                    </div>
                   </div>
                 )) : <p className="text-sm text-gray-500">Aún no has añadido profesionales a tu equipo.</p>}
               </div>
@@ -400,7 +475,7 @@ return (
                     <form onSubmit={handleAddSchedule} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end bg-gray-50 p-4 rounded-md mb-4">
                       <div>
                         <label className="text-xs">Día</label>
-                        <select value={scheduleForm.day} onChange={(e) => setScheduleForm({...scheduleForm, startTime: e.target.value})} className="mt-1 block w-full p-2 border rounded-md text-sm">
+                        <select value={scheduleForm.day} onChange={(e) => setScheduleForm(prev => ({...prev, day: parseInt(e.target.value, 10)}))} className="mt-1 block w-full p-2 border rounded-md text-sm">
                           {daysOfWeek.map((dayName, index) => (index > 0 && index < 7 && <option key={index} value={index}>{dayName}</option> ))}
                         </select>
                       </div>
@@ -418,7 +493,7 @@ return (
                       </div>
                       <button type="submit" className="bg-green-500 text-white font-bold py-2 px-3 rounded-lg text-sm">Añadir</button>
                     </form>
-                    <div className="space-y-2">
+                    <div className="space-y-2 ">
                       {professionalSchedules.map(s => (
                         <div key={s.id} className="p-2 bg-gray-100 rounded flex justify-between items-center text-sm">
                           <span><strong>{daysOfWeek[s.day_of_week]}:</strong> {s.start_time.substring(0,5)} - {s.end_time.substring(0,5)}</span>
@@ -449,30 +524,45 @@ return (
         )}
       </div>
 
+      {/*modal editar servicio */}
       {isModalOpen && (
         <Modal isOpen={isModalOpen} closeModal={closeModal} title={modalMode === 'edit' ? 'Editar Servicio' : 'Confirmar Eliminación'}>
-          {modalMode === 'edit' && selectedService ? (
-            <form onSubmit={handleUpdate} className="space-y-4">
-              <input type="text" name="name" value={selectedService.name} onChange={handleModalFormChange} className="w-full p-2 border rounded" />
-              <textarea name="description" value={selectedService.description || ''} onChange={handleModalFormChange} className="w-full p-2 border rounded" />
-              <div className="flex gap-4"><input type="number" name="duration" value={selectedService.duration} onChange={handleModalFormChange} className="w-full p-2 border rounded" placeholder="Duración (min)" />
-              <input type="number" step="0.01" name="price" value={selectedService.price} onChange={handleModalFormChange} className="w-full p-2 border rounded" placeholder="Precio" />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={closeModal} className="px-4 py-2 rounded-md bg-gray-200">Cancelar</button>
-                <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-md bg-green-500 text-white">{isSubmitting ? 'Guardando...' : 'Guardar'}</button>
-                </div>
-            </form>
-          ) : modalMode === 'delete' && selectedService ? (
-            <div>
-              <p>¿Seguro que quieres eliminar el servicio <strong>{selectedService.name}</strong>?</p>
-              <div className="flex justify-end gap-2 mt-4">
-                <button onClick={closeModal} className="px-4 py-2 rounded-md bg-gray-200">No, volver</button>
-                <button onClick={handleDelete} className="px-4 py-2 rounded-md bg-red-500 text-white">Sí, eliminar</button>
-                </div>
-            </div>
-          ) : null}
-        </Modal>
+                {modalMode === 'edit' && selectedService ? (
+                    <form onSubmit={handleUpdate} className="space-y-4">
+                        <div>
+                            <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre del Servicio</label>
+                            <input type="text" name="name" id="name" value={selectedService.name} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded-md" />
+                        </div>
+                        <div>
+                            <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
+                            <textarea name="description" id="description" value={selectedService.description || ''} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded-md" />
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="flex-1">
+                                <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Duración (min)</label>
+                                <input type="number" name="duration" id="duration" value={selectedService.duration} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded-md" />
+                            </div>
+                            <div className="flex-1">
+                                <label htmlFor="price" className="block text-sm font-medium text-gray-700">Precio</label>
+                                <input type="number" step="0.01" name="price" id="price" value={selectedService.price} onChange={handleModalFormChange} className="mt-1 w-full p-2 border rounded-md" />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-4">
+                            <button type="button" onClick={closeModal} className="px-4 py-2 rounded-md bg-gray-200 text-gray-800">Cancelar</button>
+                            <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-md bg-green-500 text-white disabled:bg-green-300">{isSubmitting ? 'Guardando...' : 'Guardar Cambios'}</button>
+                        </div>
+                    </form>
+                ) : modalMode === 'delete' && selectedService ? (
+                    <div>
+                        <p>¿Seguro que quieres eliminar el servicio <strong>{selectedService.name}</strong>?</p>
+                        <div className="flex justify-end gap-2 mt-4">
+                            <button onClick={closeModal} className="px-4 py-2 rounded-md bg-gray-200">No, volver</button>
+                            <button onClick={handleDelete} className="px-4 py-2 rounded-md bg-red-500 text-white">Sí, eliminar</button>
+                        </div>
+                    </div>
+                ) : null}
+            </Modal>
+
       )}
       {isProfModalOpen && (
         <Modal isOpen={isProfModalOpen} closeModal={closeProfModal} title="Confirmar Eliminación">
@@ -498,7 +588,7 @@ return (
         </Modal>
       )}
 
-      {/* MODAL PARA ELIMINAR DÍA LIBRE */}
+      {/* MODAL PARA ELIMINAR DiA LIBRE */}
       {overrideToDelete && (
         <Modal isOpen={!!overrideToDelete} closeModal={closeDeleteOverrideModal} title="Confirmar Eliminación">
           <div>
@@ -507,6 +597,33 @@ return (
               <button onClick={closeDeleteOverrideModal} className="px-4 py-2 rounded-md bg-gray-200">No, volver</button>
               <button onClick={handleDeleteOverride} className="px-4 py-2 rounded-md bg-red-500 text-white">Sí, eliminar</button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+       {/*Modal para Asignar Servicios */}
+      {isAssignModalOpen && (
+        <Modal isOpen={isAssignModalOpen} closeModal={closeAssignModal} title={`Asignar Servicios a ${professionalToAssign.full_name}`}>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600 mb-4">Selecciona los servicios que este profesional puede realizar:</p>
+            {services.map(service => (
+              <div key={service.id} className="flex items-center">
+                <input
+                  type="checkbox"
+                  id={`service-${service.id}`}
+                  checked={assignedServices.has(service.id)}
+                  onChange={() => handleCheckboxChange(service.id)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor={`service-${service.id}`} className="ml-3 block text-sm font-medium text-gray-700">
+                  {service.name}
+                </label>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <button onClick={closeAssignModal} className="px-4 py-2 rounded-md bg-gray-200">Cancelar</button>
+            <button onClick={handleUpdateAssignedServices} className="px-4 py-2 rounded-md bg-blue-500 text-white">Guardar Cambios</button>
           </div>
         </Modal>
       )}

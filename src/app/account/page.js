@@ -27,17 +27,17 @@ export default function AccountPage() {
           </p>
           <div className="space-y-4">
             
-            {/* Lógica para Clientes (sin cambios) */}
+            {/* Logica para Clientes*/}
             {profile?.role === 'cliente' && (
               <Link href="/account/my-appointments" className="block w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg">
                 Ver Mis Citas
               </Link>
             )}
 
-            {/* Lógica para Profesionales y Administradores */}
+            {/*Logica para Profesionales y Administradores */}
             {profile?.role === 'profesional' && (
               <>
-                {/* Estos enlaces solo para profesionales INDEPENDIENTES */}
+                {/*solo para profesionales INDEPENDIENTES */}
                 {profile.local_id === null && (
                   <>
                     <Link href="/account/services" className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg">
@@ -49,14 +49,14 @@ export default function AccountPage() {
                   </>
                 )}
 
-                {/* Este enlace para TODOS los profesionales */}
+                {/*enlace para all los profesionales */}
                 <Link href="/account/dashboard" className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg">
                   Ver mi Agenda de Citas
                 </Link>
               </>
             )}
             
-            {/* Lógica para Administradores (ya la tenías en la Navbar, pero es bueno tenerla aquí también) */}
+            {/* Administradores*/}
             {profile?.role === 'administrador' && (
               <Link href="/admin" className="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg">
                 Panel de Administración
