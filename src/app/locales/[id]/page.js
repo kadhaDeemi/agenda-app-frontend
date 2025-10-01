@@ -37,6 +37,12 @@ export default function LocalProfilePage({ params: paramsPromise }) {
   const [overrides, setOverrides] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
+  //estado modal invitado
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+
   useEffect(() => {
     const getLocalData = async () => {
       setLoading(true);
@@ -180,32 +186,64 @@ export default function LocalProfilePage({ params: paramsPromise }) {
   };
 
   const handleBooking = async () => {
-    if (!clientUser) { toast.error('Por favor, inicia sesión para poder agendar.'); return; }
-    if (!selectedService || !selectedProfessional || !bookingDate || !selectedTime) return;
-    setIsBooking(true);
-    
-    const [hours, minutes] = selectedTime.split(':');
-    const appointmentDateTime = new Date(bookingDate);
-    appointmentDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+      if (!bookingDetails) return;
+      
+      setIsBooking(true);
+      closeBookingModal();
+      
+      const { error } = await supabase.from('appointments').insert({
+        client_id: clientUser.id,
+        professional_id: profile.id,
+        service_id: selectedService.id,
+        appointment_time: bookingDetails.appointmentDateTime.toISOString(),
+        status: 'agendada'
+      })
+      .select('*, services(duration)')
+      .single();
+      
+      if (error) {
+        toast.error('Hubo un error al agendar tu cita: ' + error.message);
+      } else {
+        toast.success('¡Cita agendada con éxito!');
+        setAppointments(prev => [...prev, {
+          appointment_time: bookingDetails.appointmentDateTime.toISOString(),
+          services: { duration: selectedService.duration }
+        }]);
+        sendBookingConfirmationEmail({
+            clientEmail: clientUser.email,
+            clientName: clientProfile.full_name,
+            professionalName: profile.full_name,
+            serviceName: selectedService.name,
+            appointmentTime: bookingDetails.appointmentDateTime.toISOString(),
+            locationAddress: local.address,
+            locationPhone: local.phone
+          });
+      }
+      setIsBooking(false);
+    };
 
-    const { data, error } = await supabase.rpc('book_appointment_if_available', {
-      p_client_id: clientUser.id,
-      p_professional_id: selectedProfessional.id,
-      p_service_id: selectedService.id,
-      p_appointment_time: appointmentDateTime.toISOString()
-    });
+  //funcion reserva para usuarios registrado
+  const confirmBookingForUser = async () => {
+  setIsBooking(true);
+  const appointmentDateTime = new Date(bookingDate);
+  const [hours, minutes] = selectedTime.split(':');
+  appointmentDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
 
-    if (error) {
-      toast.error('Hubo un error al agendar la cita: ' + error.message);
-    } else if (data.error === 'SLOT_TAKEN') {
-      toast.error('Lo sentimos, esta hora acaba de ser reservada.');
-      const { data: appointmentsData } = await supabase.from('appointments')
-      .select('appointment_time, status, services(duration)').eq('professional_id', selectedProfessional.id).gte('appointment_time', new Date(bookingDate)
-      .setHours(0,0,0,0)).lte('appointment_time', new Date(bookingDate).setHours(23,59,59,999));
-      setAppointments(appointmentsData || []);
-    } else {
-      toast.success('¡Cita agendada con éxito!');
-      sendBookingConfirmationEmail({
+  const { data, error } = await supabase.rpc('book_appointment_if_available', {
+    p_professional_id: selectedProfessional.id,
+    p_service_id: selectedService.id,
+    p_appointment_time: appointmentDateTime.toISOString(),
+    p_client_id: clientUser.id
+  });
+
+  if (error) {
+    toast.error('Hubo un error al agendar la cita.');
+    console.error(error);
+  } else if (data.error === 'SLOT_TAKEN') {
+    toast.error('Lo sentimos, esta hora acaba de ser reservada.');
+  } else {
+    toast.success('¡Cita agendada con éxito!');
+    sendBookingConfirmationEmail({
       clientEmail: clientUser.email,
       clientName: clientProfile.full_name,
       professionalName: selectedProfessional.full_name,
@@ -214,10 +252,55 @@ export default function LocalProfilePage({ params: paramsPromise }) {
       locationAddress: local.address,
       locationPhone: local.phone
     });
+    closeBookingModal();
+  }
+  setIsBooking(false);
+};
+
+  //reserva para no reegistrados
+  const handleGuestBooking = async (e) => {
+    e.preventDefault();
+    if (!guestName || !guestEmail || !guestPhone) {
+      toast.error("Todos los campos son obligatorios.");
+      return;
+    }
+    setIsBooking(true);
+
+    const appointmentDateTime = new Date(bookingDate);
+    const [hours, minutes] = selectedTime.split(':');
+    appointmentDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+
+    const { data, error } = await supabase.rpc('book_appointment_if_available', {
+      p_professional_id: selectedProfessional.id,
+      p_service_id: selectedService.id,
+      p_appointment_time: appointmentDateTime.toISOString(),
+      p_guest_name: guestName,
+      p_guest_email: guestEmail,
+      p_guest_phone: guestPhone
+    });
+
+    if (error) {
+      toast.error('Hubo un error al agendar la cita.');
+    } else if (data.error === 'SLOT_TAKEN') {
+      toast.error('Lo sentimos, esa hora acaba de ser reservada.');
+    } else {
+      toast.success('¡Cita agendada con éxito! Revisa tu email para la confirmación.');
+      sendBookingConfirmationEmail({
+        clientEmail: guestEmail,
+        clientName: guestName,
+        professionalName: selectedProfessional.full_name,
+        serviceName: selectedService.name,
+        appointmentTime: appointmentDateTime.toISOString(),
+        locationAddress: local.address,
+        locationPhone: local.phone
+      });
+      setIsGuestModalOpen(false);
       closeBookingModal();
     }
     setIsBooking(false);
   };
+
+
   
   if (loading) {
     return <p className="text-center p-8">Cargando...</p>;
@@ -264,6 +347,7 @@ export default function LocalProfilePage({ params: paramsPromise }) {
         </div>
       </div> 
 
+      {/*modal reserva cliente logeaado*/}
       <Modal isOpen={isBookingModalOpen} closeModal={closeBookingModal} title={`Reservar: ${selectedService?.name}`} size='2xl'>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="flex flex-col items-center">
@@ -302,9 +386,33 @@ export default function LocalProfilePage({ params: paramsPromise }) {
         </div>
         <div className="mt-6 flex justify-end">
           <button onClick={handleBooking} disabled={!selectedTime || isBooking} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-400">
-            {isBooking ? 'Reservando...' : 'Confirmar Cita'}
+            {isBooking ? 'Reservando...' : (clientUser ? 'Confirmar Cita' : 'Continuar')}
           </button>
         </div>
+      </Modal>
+      {/*modal user no registrados */}
+      <Modal isOpen={isGuestModalOpen} closeModal={() => setIsGuestModalOpen(false)} title="Completa tus datos para reservar">
+        <form onSubmit={handleGuestBooking}>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="guestName" className="block text-sm font-medium text-gray-700">Nombre Completo</label>
+              <input type="text" id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+            </div>
+            <div>
+              <label htmlFor="guestEmail" className="block text-sm font-medium text-gray-700">Email</label>
+              <input type="email" id="guestEmail" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} required className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+            </div>
+            <div>
+              <label htmlFor="guestPhone" className="block text-sm font-medium text-gray-700">Teléfono</label>
+              <input type="tel" id="guestPhone" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} required className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+            </div>
+          </div>
+          <div className="mt-6 flex justify-end">
+            <button type="submit" disabled={isBooking} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-400">
+              {isBooking ? 'Reservando...' : 'Confirmar Cita como Invitado'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </>
   );

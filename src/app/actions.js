@@ -26,9 +26,8 @@ export async function sendBookingConfirmationEmail({ clientEmail, professionalNa
                 
                 <h3>Dónde:</h3>
                 <p><strong>Dirección:</strong> ${locationAddress || 'No especificada'}</p>
-                <p><strong>Teléfono de contacto:</strong> ${locationPhone || 'No especificado'}</p>
                 <hr>
-                <p>Si necesitas reprogramar o cancelar, por favor hazlo saber por llamada o via whatsapp.</p>
+                <p><strong>Importante:</strong> Si necesitas cancelar o modificar tu cita, por favor contacta directamente al local al siguiente número: <strong>${locationPhone || 'No especificado'}</strong>.</p>
                 <p>¡Te esperamos!</p>
             `,
         });

@@ -30,6 +30,12 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   const [bookingDetails, setBookingDetails] = useState(null);
   const [reviews, setReviews] = useState([]);
 
+  //estados modal de invitado
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+
   useEffect(() => {
     // Obtene todos los datos
     async function getProfessionalData(id) {
@@ -87,131 +93,139 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
   //HORAS DISPONIBLES
   const availableTimes = useMemo(() => {
     if (!selectedService || !selectedDate) return [];
-
-    // Ve si hay dia libre 
     const dateString = selectedDate.toISOString().split('T')[0];
-    if (overrides.some(o => o.override_date === dateString && !o.start_time)) {
-      return [];
-    }
-
-    // Mira el horario para el dia selec
+    if (overrides.some(o => o.override_date === dateString)) return [];
     const dayOfWeek = selectedDate.getDay();
-    const workBlocks = schedules
-      .filter(s => s.day_of_week === dayOfWeek)
-      .map(s => ({
-        start: s.start_time.substring(0, 5),
-        end: s.end_time.substring(0, 5),
-      }));
-
+    const workBlocks = schedules.filter(s => s.day_of_week === dayOfWeek);
     if (workBlocks.length === 0) return [];
 
-    // obt los bloques ya ocupados (reservas)
-    const bookedBlocks = appointments
-  .filter(appt => appt.status !== 'cancelada')
-  .map(appt => {
-      const startTime = new Date(appt.appointment_time);
-      const endTime = new Date(startTime.getTime() + appt.services.duration * 60000);
-      return {
-        start: `${startTime.getHours() < 10 ? '0' : ''}${startTime.getHours()}:${startTime.getMinutes() < 10 ? '0' : ''}${startTime.getMinutes()}`,
-        end: `${endTime.getHours() < 10 ? '0' : ''}${endTime.getHours()}:${endTime.getMinutes() < 10 ? '0' : ''}${endTime.getMinutes()}`,
-      };
-    });
+    const bookedSlots = appointments
+      .filter(appt => appt.status !== 'cancelada' && appt.services)
+      .map(appt => {
+        const startTime = new Date(appt.appointment_time);
+        const endTime = new Date(startTime.getTime() + appt.services.duration * 60000);
+        return { start: startTime, end: endTime };
+      });
 
-
-    // Generar y filtrar los posibles horarios
     const availableSlots = [];
     const serviceDuration = selectedService.duration;
     const now = new Date();
     const isToday = selectedDate.toDateString() === now.toDateString();
 
     workBlocks.forEach(block => {
-      let currentTime = block.start;
-      while (currentTime < block.end) {
-        const [hour, minute] = currentTime.split(':').map(Number);
-        const slotStart = new Date(selectedDate);
-        slotStart.setHours(hour, minute, 0, 0);
+      const [startH, startM] = block.start_time.split(':');
+      const [endH, endM] = block.end_time.split(':');
+      let slotStart = new Date(selectedDate);
+      slotStart.setHours(startH, startM, 0, 0);
+      const blockEnd = new Date(selectedDate);
+      blockEnd.setHours(endH, endM, 0, 0);
 
+      while (slotStart < blockEnd) {
         const slotEnd = new Date(slotStart.getTime() + serviceDuration * 60000);
-        
-        const slotEndTimeString = `${slotEnd.getHours() < 10 ? '0' : ''}${slotEnd.getHours()}:${slotEnd.getMinutes() < 10 ? '0' : ''}${slotEnd.getMinutes()}`;
-
-        // Comprobaciones para que un slot sea valido
+        if (slotEnd > blockEnd) break;
         const isAfterNow = isToday ? slotStart > now : true;
-        const endsWithinWorkBlock = slotEndTimeString <= block.end;
-        const doesNotOverlap = !bookedBlocks.some(booked => 
-          currentTime < booked.end && slotEndTimeString > booked.start
+        const doesNotOverlap = !bookedSlots.some(booked => 
+            slotStart.getTime() < booked.end.getTime() && slotEnd.getTime() > booked.start.getTime()
         );
-
-        if (isAfterNow && endsWithinWorkBlock && doesNotOverlap) {
-          availableSlots.push(currentTime);
+        if (isAfterNow && doesNotOverlap) {
+            availableSlots.push(slotStart.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }));
         }
-
-        //muestra al siguiente posible slot (intervalos de 30 min)
-        const nextSlot = new Date(slotStart.getTime() + 30 * 60000);
-        currentTime = `${nextSlot.getHours() < 10 ? '0' : ''}${nextSlot.getHours()}:${nextSlot.getMinutes() < 10 ? '0' : ''}${nextSlot.getMinutes()}`;
+        slotStart.setMinutes(slotStart.getMinutes() + 30);
       }
     });
-    
     return availableSlots;
-
   }, [selectedService, selectedDate, schedules, overrides, appointments]);
 
   // funcion para agendar
   const handleBooking = async () => {
     if (!bookingDetails) return;
-    
+    if (clientUser) {
+      confirmBookingForUser();
+    } else {
+      setIsBookingModalOpen(false);
+      setIsGuestModalOpen(true);
+    }
+  };
+
+  //funcion user registrados (clientes)
+  const confirmBookingForUser = async () => {
     setIsBooking(true);
-    closeBookingModal();
-    
-    const { error } = await supabase.from('appointments').insert({
-      client_id: clientUser.id,
-      professional_id: profile.id,
-      service_id: selectedService.id,
-      appointment_time: bookingDetails.appointmentDateTime.toISOString(),
-      status: 'agendada'
-    })
-    .select('*, services(duration)')
-    .single();
+    const { data, error } = await supabase.rpc('create_appointment_slot', {
+      p_professional_id: profile.id,
+      p_service_id: selectedService.id,
+      p_appointment_time: bookingDetails.appointmentDateTime.toISOString(),
+      p_client_id: clientUser.id
+    });
     
     if (error) {
-      toast.error('Hubo un error al agendar tu cita: ' + error.message);
+      toast.error('Hubo un error al agendar la cita.');
+    } else if (data.error === 'SLOT_TAKEN') {
+      toast.error('Lo sentimos, esta hora acaba de ser reservada.');
     } else {
       toast.success('¡Cita agendada con éxito!');
-      setAppointments(prev => [...prev, {
-        appointment_time: bookingDetails.appointmentDateTime.toISOString(),
-        services: { duration: selectedService.duration }
-      }]);
       sendBookingConfirmationEmail({
-          clientEmail: clientUser.email,
-          clientName: clientProfile.full_name,
-          professionalName: profile.full_name,
-          serviceName: selectedService.name,
-          appointmentTime: bookingDetails.appointmentDateTime.toISOString(),
-          locationAddress: local.address,
-          locationPhone: local.phone
-        });
+        clientEmail: clientUser.email,
+        clientName: clientProfile.full_name,
+        professionalName: profile.full_name,
+        serviceName: selectedService.name,
+        appointmentTime: bookingDetails.appointmentDateTime.toISOString(),
+        locationAddress: profile.address,
+        locationPhone: profile.phone
+      });
+      closeBookingModal();
+    }
+    setIsBooking(false);
+  };
+
+  //funcion user no registrad
+  const handleGuestBooking = async (e) => {
+    e.preventDefault();
+    if (!guestName || !guestEmail || !guestPhone) return toast.error("Todos los campos son obligatorios.");
+    setIsBooking(true);
+
+    const { data, error } = await supabase.rpc('create_appointment_slot', {
+      p_professional_id: profile.id,
+      p_service_id: selectedService.id,
+      p_appointment_time: bookingDetails.appointmentDateTime.toISOString(),
+      p_guest_name: guestName,
+      p_guest_email: guestEmail,
+      p_guest_phone: guestPhone
+    });
+
+    if (error) {
+      toast.error('Hubo un error al agendar la cita.');
+    } else if (data.error === 'SLOT_TAKEN') {
+      toast.error('Lo sentimos, esta hora acaba de ser reservada.');
+    } else {
+      toast.success('¡Cita agendada con éxito! Revisa tu email.');
+      sendBookingConfirmationEmail({
+        clientEmail: guestEmail,
+        clientName: guestName,
+        professionalName: profile.full_name,
+        serviceName: selectedService.name,
+        appointmentTime: bookingDetails.appointmentDateTime.toISOString(),
+        locationAddress: profile.address,
+        locationPhone: profile.phone
+      });
+      setIsGuestModalOpen(false);
+      closeBookingModal();
     }
     setIsBooking(false);
   };
 
   // funcionees modal
   const openBookingModal = (time) => {
-    if (!clientUser) {
-      toast('Por favor, inicia sesión para agendar una cita.');
-      return;
-    }
     if (!selectedService) {
-      toast('Por favor, selecciona un servicio primero.');
+      toast.error('Por favor, selecciona un servicio primero.');
       return;
     }
     const [hours, minutes] = time.split(':');
     const appointmentDateTime = new Date(selectedDate);
     appointmentDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-    
     setBookingDetails({ time, appointmentDateTime });
     setIsBookingModalOpen(true);
   };
-
+  
   const closeBookingModal = () => {
     setIsBookingModalOpen(false);
     setBookingDetails(null);
@@ -323,11 +337,35 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
               Cancelar
             </button>
             <button onClick={handleBooking} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none">
-              Confirmar
+              {isBooking ? 'Reservando...' : (clientUser ? 'Confirmar' : 'Continuar')}
             </button>
           </div>
         </Modal>
       )}
+      {/*Modaal no registrados */}
+    <Modal isOpen={isGuestModalOpen} closeModal={() => setIsGuestModalOpen(false)} title="Completa tus datos para reservar">
+      <form onSubmit={handleGuestBooking}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="guestName" className="block text-sm font-medium text-gray-700">Nombre Completo</label>
+            <input type="text" id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+          </div>
+          <div>
+            <label htmlFor="guestEmail" className="block text-sm font-medium text-gray-700">Email</label>
+            <input type="email" id="guestEmail" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} required className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+          </div>
+          <div>
+            <label htmlFor="guestPhone" className="block text-sm font-medium text-gray-700">Teléfono</label>
+            <input type="tel" id="guestPhone" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} required className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button type="submit" disabled={isBooking} className="px-4 py-2 rounded-md bg-green-600 text-white disabled:bg-gray-400">
+            {isBooking ? 'Reservando...' : 'Confirmar Cita como Invitado'}
+          </button>
+        </div>
+      </form>
+    </Modal>
     </div>
     </>
   );
