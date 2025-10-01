@@ -33,7 +33,6 @@ export default function AccountPage() {
                 Ver Mis Citas
               </Link>
             )}
-
             {/*Logica para Profesionales y Administradores */}
             {profile?.role === 'profesional' && (
               <>
@@ -46,23 +45,28 @@ export default function AccountPage() {
                     <Link href="/account/schedule" className="block w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">
                       Gestionar mi Horario
                     </Link>
+                    <Link href="/account/edit-profile" className="block w-full text-center bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                      Editar mi Perfil
+                      </Link>
                   </>
                 )}
-
                 {/*enlace para all los profesionales */}
                 <Link href="/account/dashboard" className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg">
                   Ver mi Agenda de Citas
                 </Link>
               </>
             )}
-            
             {/* Administradores*/}
             {profile?.role === 'administrador' && (
+              <>
               <Link href="/admin" className="block w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg">
                 Panel de Administración
               </Link>
+              <Link href="/account/edit-profile" className="block w-full text-center bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                  Editar mi Perfil
+                </Link>
+              </>   
             )}
-
             <button onClick={handleLogout} className="block w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
               Cerrar Sesión
             </button>

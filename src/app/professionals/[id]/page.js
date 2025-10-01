@@ -186,7 +186,9 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
           clientName: clientProfile.full_name,
           professionalName: profile.full_name,
           serviceName: selectedService.name,
-          appointmentTime: bookingDetails.appointmentDateTime.toISOString()
+          appointmentTime: bookingDetails.appointmentDateTime.toISOString(),
+          locationAddress: local.address,
+          locationPhone: local.phone
         });
     }
     setIsBooking(false);
@@ -295,7 +297,6 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
               {reviews.map(review => (
                 <li key={review.id} className="border-b pb-6 last:border-b-0">
                   <div className="flex items-center mb-2">
-                    {/* Aquí podrías mostrar el avatar del cliente */}
                     <div className="font-bold mr-4">{review.client.full_name}</div>
                     <StarDisplay rating={review.rating} />
                   </div>

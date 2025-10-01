@@ -4,7 +4,7 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendBookingConfirmationEmail({ clientEmail, professionalName, serviceName, appointmentTime, clientName }) {
+export async function sendBookingConfirmationEmail({ clientEmail, professionalName, serviceName, appointmentTime, clientName, locationAddress, locationPhone }) {
 
     const formattedDate = new Date(appointmentTime).toLocaleString('es-ES', {
         dateStyle: 'long',
@@ -18,10 +18,17 @@ export async function sendBookingConfirmationEmail({ clientEmail, professionalNa
             subject: '✅ ¡Tu cita ha sido agendada!',
             html: `
                 <h1>¡Hola ${clientName}!</h1>
-                <p>Tu cita ha sido agendada con éxito.</p>
+                <p>Tu cita ha sido agendada con éxito. Aquí están los detalles:</p>
+                <hr>
                 <p><strong>Servicio:</strong> ${serviceName}</p>
                 <p><strong>Profesional:</strong> ${professionalName}</p>
                 <p><strong>Fecha y Hora:</strong> ${formattedDate}</p>
+                
+                <h3>Dónde:</h3>
+                <p><strong>Dirección:</strong> ${locationAddress || 'No especificada'}</p>
+                <p><strong>Teléfono de contacto:</strong> ${locationPhone || 'No especificado'}</p>
+                <hr>
+                <p>Si necesitas reprogramar o cancelar, por favor hazlo saber por llamada o via whatsapp.</p>
                 <p>¡Te esperamos!</p>
             `,
         });

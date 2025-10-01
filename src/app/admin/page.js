@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient';
 import PrivateRoute from '@/components/PrivateRoute';
 import toast from 'react-hot-toast';
 import Modal from '@/components/Modal';
-import { Edit, Trash2, UserPlus, X, Settings } from 'lucide-react';
+import { Edit, Trash2, UserPlus, X, Settings, UserCog } from 'lucide-react';
+import Image from 'next/image';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 
@@ -55,6 +56,23 @@ export default function AdminDashboardPage() {
 
   const [scheduleToDelete, setScheduleToDelete] = useState(null);
   const [overrideToDelete, setOverrideToDelete] = useState(null);
+
+  // estados edicion perfil
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [professionalToEdit, setProfessionalToEdit] = useState(null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+   //estados banner
+  const [bannerFile, setBannerFile] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState(null);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  
+  const [localName, setLocalName] = useState('');
+  const [localAddress, setLocalAddress] = useState('');
+  const [localPhone, setLocalPhone] = useState('');
+  const [isUpdatingLocal, setIsUpdatingLocal] = useState(false);
   
 
   useEffect(() => {
@@ -81,6 +99,15 @@ export default function AdminDashboardPage() {
     };
     fetchAdminData();
   }, [user]);
+
+
+  useEffect(() => {
+    if (local) {
+      setLocalName(local.name || '');
+      setLocalAddress(local.address || '');
+      setLocalPhone(local.phone || '');
+    }
+  }, [local]);
 
   //horarios del profesional seleccionado
   useEffect(() => {
@@ -379,6 +406,150 @@ export default function AdminDashboardPage() {
   }, [scheduleForm.startTime, scheduleForm.endTime, availableEndTimeSlots]);
 
 
+  const openEditModal = (professional) => {
+    setProfessionalToEdit(professional);
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setProfessionalToEdit(null);
+    setAvatarFile(null);
+    setAvatarPreview(null);
+    setBannerFile(null);
+    setBannerPreview(null);
+    setIsUploading(false);
+  };
+
+  const handleFileChange = (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    if (type === 'avatar') {
+      setAvatarFile(file);
+      setAvatarPreview(previewUrl);
+    } else if (type === 'banner') {
+      setBannerFile(file);
+      setBannerPreview(previewUrl);
+    }
+  };
+
+  const handleUpload = async (type) => {
+    if (!professionalToEdit) return;
+
+    const file = type === 'avatar' ? avatarFile : bannerFile;
+    const columnName = type === 'avatar' ? 'avatar_url' : 'banner_url';
+
+    if (!file) {
+      toast.error('Por favor, selecciona una imagen primero.');
+      return;
+    }
+    setIsUploading(true);
+
+    try {
+      // La ruta usa el ID del profesional
+      const filePath = `${professionalToEdit.id}/${type}-${Date.now()}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('profile-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('profile-images')
+        .getPublicUrl(uploadData.path);
+      const publicUrl = urlData.publicUrl;
+
+      // Actualiza el perfil del profesional seleccionado
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from('profiles')
+        .update({ [columnName]: publicUrl })
+        .eq('id', professionalToEdit.id)
+        .select()
+        .single();
+      
+      if (updateError) throw updateError;
+      setProfessionals(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+      toast.success(`La imagen de ${professionalToEdit.full_name} ha sido actualizada.`);
+      closeEditModal();
+
+    } catch (error) {
+      console.error('Error al subir imagen:', error);
+      toast.error('Hubo un error al subir la imagen.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+    const handleBannerUpload = async () => {
+        if (!bannerFile || !local) {
+            toast.error('Por favor, selecciona una imagen primero.');
+            return;
+        }
+        setIsUploadingBanner(true);
+        try {
+            
+            const filePath = `local-images/${local.id}/banner-${Date.now()}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('profile-images')
+                .upload(filePath, bannerFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage
+                .from('profile-images')
+                .getPublicUrl(uploadData.path);
+            const publicUrl = urlData.publicUrl;
+
+            // Act la tabla locales
+            const { data: updatedLocal, error: updateError } = await supabase
+                .from('locales')
+                .update({ banner_url: publicUrl })
+                .eq('id', local.id)
+                .select()
+                .single();
+
+            if (updateError) throw updateError;
+
+            setLocal(updatedLocal);
+            setBannerFile(null);
+            setBannerPreview(null);
+            toast.success('¡El banner del local ha sido actualizado!');
+
+        } catch (error) {
+            toast.error('Hubo un error al subir el banner.');
+            console.error("Error uploading banner:", error);
+        } finally {
+            setIsUploadingBanner(false);
+        }
+    };
+
+    //actualiza los datos del local
+  const handleLocalUpdate = async (e) => {
+    e.preventDefault();
+    setIsUpdatingLocal(true);
+
+    const { data: updatedLocal, error } = await supabase
+      .from('locales')
+      .update({
+        name: localName,
+        address: localAddress,
+        phone: localPhone,
+      })
+      .eq('id', local.id)
+      .select()
+      .single();
+    
+    if (error) {
+      toast.error('Hubo un error al actualizar los datos del local.');
+      console.error("Error updating local:", error);
+    } else {
+      setLocal(updatedLocal); 
+      toast.success('¡Datos del local actualizados con éxito!');
+    }
+    setIsUpdatingLocal(false);
+  };
+  
   //Modal
   const openModal = (mode, service) => { setModalMode(mode); setSelectedService({ ...service }); setIsModalOpen(true); };
   const closeModal = () => { setIsModalOpen(false); setModalMode(''); setSelectedService(null); };
@@ -395,6 +566,50 @@ return (
         <h1 className="text-3xl font-bold mb-6">Panel de Administración</h1>
         {loading ? (<p>Cargando panel...</p>) : !local ? (<p>No se encontró un local asignado a tu cuenta.</p>) : (
           <div className="space-y-8">
+            {/*editar datos del local*/}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold mb-4">Información del Local</h2>
+                <form onSubmit={handleLocalUpdate} className="space-y-4">
+                  <div>
+                    <label htmlFor="localName" className="block text-sm font-medium text-gray-700">Nombre del Local</label>
+                    <input id="localName" type="text" value={localName} onChange={(e) => setLocalName(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                  </div>
+                  <div>
+                    <label htmlFor="localAddress" className="block text-sm font-medium text-gray-700">Dirección</label>
+                    <input id="localAddress" type="text" value={localAddress} onChange={(e) => setLocalAddress(e.target.value)}
+                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                  </div>
+                  <div>
+                    <label htmlFor="localPhone" className="block text-sm font-medium text-gray-700">Teléfono de Contacto</label>
+                    <input id="localPhone" type="tel" value={localPhone} onChange={(e) => setLocalPhone(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
+                  </div>
+                    <button type="submit" disabled={isUpdatingLocal} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400">
+                      {isUpdatingLocal ? 'Guardando...' : 'Guardar Información'}
+                    </button>
+                </form>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow-md">
+               <h2 className="text-2xl font-bold mb-4">Gestionar Banner del Local</h2>
+               <div className="relative h-48 w-full bg-gray-200 rounded-lg overflow-hidden mb-4">
+                <Image src={bannerPreview || local.banner_url || '/default-banner.webp'} alt="Banner del local" fill style={{ objectFit: 'cover' }}/>
+                </div>
+                <input type="file" id="banner-upload-admin" accept="image/png, image/jpeg" onChange={(e) => { const file = e.target.files[0];
+                if (file) {
+                  setBannerFile(file);
+                  setBannerPreview(URL.createObjectURL(file));
+                }
+              }} className="hidden"/>
+              <div className="flex gap-4">
+                <label htmlFor="banner-upload-admin" className="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">
+                  Seleccionar Imagen
+                </label>
+                <button onClick={handleBannerUpload} disabled={!bannerFile || isUploadingBanner} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400">
+                  {isUploadingBanner ? 'Guardando...' : 'Guardar Banner'}
+                  </button>
+                  </div>
+              </div>
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-2xl font-bold mb-4">Añadir Servicio a {local.name}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -440,6 +655,9 @@ return (
                   <div key={prof.id} className="p-3 bg-gray-50 rounded-md flex justify-between items-center">
                     <span>{prof.full_name}</span>
                     <div className="flex items-center gap-2">
+                      <button onClick={() => openEditModal(prof)} className="p-2 text-gray-600 hover:bg-gray-200 rounded-full" title="Editar Perfil del Profesional">
+                        <UserCog size={16} />
+                      </button>
                       <button onClick={() => openAssignModal(prof)} className="p-2 text-gray-600 hover:bg-gray-200 rounded-full" title="Asignar Servicios">
                         <Settings size={16} />
                       </button>
@@ -608,13 +826,8 @@ return (
             <p className="text-sm text-gray-600 mb-4">Selecciona los servicios que este profesional puede realizar:</p>
             {services.map(service => (
               <div key={service.id} className="flex items-center">
-                <input
-                  type="checkbox"
-                  id={`service-${service.id}`}
-                  checked={assignedServices.has(service.id)}
-                  onChange={() => handleCheckboxChange(service.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                <input type="checkbox" id={`service-${service.id}`} checked={assignedServices.has(service.id)} 
+                onChange={() => handleCheckboxChange(service.id)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
                 <label htmlFor={`service-${service.id}`} className="ml-3 block text-sm font-medium text-gray-700">
                   {service.name}
                 </label>
@@ -627,6 +840,52 @@ return (
           </div>
         </Modal>
       )}
+
+      {isEditModalOpen && professionalToEdit && (
+    <Modal isOpen={isEditModalOpen} closeModal={closeEditModal} title={`Editar Perfil de ${professionalToEdit.full_name}`} size="2xl">
+        <div className="space-y-6">
+            {/* Seccion para editar el Banner */}
+            <div>
+                <h3 className="font-semibold mb-2">Imagen de Banner</h3>
+                <div className="relative h-40 w-full bg-gray-200 rounded-lg overflow-hidden mb-4">
+                    <Image
+                        src={bannerPreview || professionalToEdit.banner_url || '/default-banner.webp'}
+                        alt="Vista previa del banner"
+                        fill
+                        style={{ objectFit: 'cover' }}
+                    />
+                </div>
+                <input type="file" id="banner-upload-admin" accept="image/png, image/jpeg" onChange={(e) => handleFileChange(e, 'banner')} className="hidden" />
+                <div className="flex gap-4">
+                    <label htmlFor="banner-upload-admin" className="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Seleccionar Imagen</label>
+                    <button onClick={() => handleUpload('banner')} disabled={!bannerFile || isUploading} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400 text-sm">
+                        {isUploading ? 'Guardando...' : 'Guardar Banner'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Seccion para editar el Avatar */}
+            <div>
+                <h3 className="font-semibold mb-2">Foto de Perfil (Avatar)</h3>
+                <div className="relative h-24 w-24 bg-gray-200 rounded-full overflow-hidden mb-4">
+                    <Image
+                        src={avatarPreview || professionalToEdit.avatar_url || '/default-avatar.png'}
+                        alt="Vista previa del avatar"
+                        fill
+                        style={{ objectFit: 'cover' }}
+                    />
+                </div>
+                <input type="file" id="avatar-upload-admin" accept="image/png, image/jpeg" onChange={(e) => handleFileChange(e, 'avatar')} className="hidden" />
+                <div className="flex gap-4">
+                    <label htmlFor="avatar-upload-admin" className="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Seleccionar Imagen</label>
+                    <button onClick={() => handleUpload('avatar')} disabled={!avatarFile || isUploading} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400 text-sm">
+                        {isUploading ? 'Guardando...' : 'Guardar Avatar'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Modal>
+  )}
     </PrivateRoute>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
 
 export default function SignUpPage() {
   const [fullName, setFullName] = useState('');
@@ -9,12 +11,17 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [phone, setPhone] = useState('');
 
   const handleSignUp = async (event) => {
-    event.preventDefault(); // Previene que la pagina se recargue
+    event.preventDefault();
     setLoading(true);
     setMessage('');
-    //console.log('Enviando a Supabase:', { email, password, fullName });
+    if (!isValidPhoneNumber(phone)) {
+        toast.error('Por favor, ingresa un número de teléfono válido.');
+        setLoading(false);
+        return;
+    }
     
     // registrarse
     const { data, error } = await supabase.auth.signUp({
@@ -24,15 +31,26 @@ export default function SignUpPage() {
         // datos que se guardaran en la tabla de supabase
         data: {
           full_name: fullName,
+          phone: phone,
           role: 'cliente' // Por defecto todos son cliente
         }
       }
     });
 
     if (error) {
-      setMessage('Error al registrar: ' + error.message);
+      // Manejo de error si existe cel
+      if (error.message.includes('duplicate key value violates unique constraint "profiles_phone_key"')) {
+        toast.error('Este número de teléfono ya está registrado.');
+      } else {
+        toast.error('Error al registrar: ' + error.message);
+      }
     } else {
-      setMessage('¡Registro exitoso! Revisa tu email para confirmar tu cuenta.');
+      toast.success('¡Registro exitoso! Revisa tu email para confirmar tu cuenta.');
+      // Limpia form
+      setFullName('');
+      setEmail('');
+      setPassword('');
+      setPhone('');
     }
 
     setLoading(false);
@@ -45,42 +63,21 @@ export default function SignUpPage() {
         <form onSubmit={handleSignUp}>
           <div className="mb-4">
             <label className="block text-gray-700 mb-2" htmlFor="fullName">Nombre Completo</label>
-            <input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-gray-700"
-              required
-            />
+            <input id="fullName" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-gray-700" required/>
           </div>
           <div className="mb-4">
             <label className="block text-gray-700 mb-2" htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-gray-700"
-              required
-            />
+            <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-gray-700" required/>
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2" htmlFor="phone">Número de Teléfono</label>
+            <PhoneInput id="phone" international defaultCountry="CL" value={phone} onChange={setPhone} className="w-full px-3 py-2 border rounded-lg text-gray-700" required/>
           </div>
           <div className="mb-6">
             <label className="block text-gray-700 mb-2" htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-gray-700"
-              required
-            />
+            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-gray-700" required/>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-blue-300"
-          >
+          <button type="submit" disabled={loading} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-blue-300">
             {loading ? 'Registrando...' : 'Registrar'}
           </button>
         </form>

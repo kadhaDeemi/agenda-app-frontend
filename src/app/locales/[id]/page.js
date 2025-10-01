@@ -210,7 +210,9 @@ export default function LocalProfilePage({ params: paramsPromise }) {
       clientName: clientProfile.full_name,
       professionalName: selectedProfessional.full_name,
       serviceName: selectedService.name,
-      appointmentTime: appointmentDateTime.toISOString()
+      appointmentTime: appointmentDateTime.toISOString(),
+      locationAddress: local.address,
+      locationPhone: local.phone
     });
       closeBookingModal();
     }
@@ -230,7 +232,7 @@ export default function LocalProfilePage({ params: paramsPromise }) {
       <div className="container mx-auto px-6 py-8">
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
           <div className="relative h-64 w-full mb-4 rounded-lg overflow-hidden">
-            <Image src={local.photo_url || '/default-local.webp'} alt={`Foto de ${local.name}`} fill style={{ objectFit: 'cover' }}/>
+            <Image src={local.banner_url || '/default-local.webp'} alt={`Foto de ${local.name}`} fill style={{ objectFit: 'cover' }}/>
           </div>
           <h1 className="text-4xl font-bold">{local.name}</h1>
           <p className="text-lg text-gray-600 mt-2">{local.address}</p>

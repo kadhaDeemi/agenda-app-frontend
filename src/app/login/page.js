@@ -25,8 +25,8 @@ export default function LoginPage() {
     if (error) {
       setMessage('Error al iniciar sesión: ' + error.message);
     } else {
-      //lo lleva al page cuenta si inicia sesion
-      router.push('/account');
+      //lo lleva al page home si inicia sesion
+      router.push('/');
     }
 
     setLoading(false);
@@ -39,31 +39,13 @@ export default function LoginPage() {
         <form onSubmit={handleLogin}>
           <div className="mb-4">
             <label className="block text-gray-700 mb-2" htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-gray-700"
-              required
-            />
+            <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-gray-700" required/>
           </div>
           <div className="mb-6">
             <label className="block text-gray-700 mb-2" htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-gray-700"
-              required
-            />
+            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-gray-700" required/>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300"
-          >
+          <button type="submit" disabled={loading} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-300">
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
