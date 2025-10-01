@@ -8,11 +8,12 @@ import 'react-day-picker/dist/style.css';
 import Modal from '@/components/Modal';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
+import { sendBookingConfirmationEmail } from '@/app/actions';
 
 export default function LocalProfilePage({ params: paramsPromise }) {
   const params = use(paramsPromise);
   const { id: localId } = params;
-  const { user: clientUser } = useAuth();
+  const { user: clientUser, profile: clientProfile } = useAuth();
 
   const [local, setLocal] = useState(null);
   const [services, setServices] = useState([]);
@@ -204,6 +205,13 @@ export default function LocalProfilePage({ params: paramsPromise }) {
       setAppointments(appointmentsData || []);
     } else {
       toast.success('¡Cita agendada con éxito!');
+      sendBookingConfirmationEmail({
+      clientEmail: clientUser.email,
+      clientName: clientProfile.full_name,
+      professionalName: selectedProfessional.full_name,
+      serviceName: selectedService.name,
+      appointmentTime: appointmentDateTime.toISOString()
+    });
       closeBookingModal();
     }
     setIsBooking(false);
@@ -245,7 +253,7 @@ export default function LocalProfilePage({ params: paramsPromise }) {
             {professionals.map(prof => (
               <div key={prof.id} className="text-center">
                 <div className="relative h-24 w-24 mx-auto rounded-full overflow-hidden">
-                  <Image src={prof.avatar_url || '/default-avatar.png'} alt={`Foto de ${prof.full_name}`} fill style={{ objectFit: 'cover' }} />
+                  <Image src={prof.avatar_url || '/default-avatar.webp'} alt={`Foto de ${prof.full_name}`} fill style={{ objectFit: 'cover' }} />
                 </div>
                 <p className="mt-2 font-semibold">{prof.full_name}</p>
               </div>

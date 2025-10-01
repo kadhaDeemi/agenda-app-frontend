@@ -9,10 +9,11 @@ import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
 import Modal from '@/components/Modal';
 import StarDisplay from '@/components/StarDisplay';
+import { sendBookingConfirmationEmail } from '@/app/actions';
 
 export default function ProfessionalProfilePage({ params: paramsPromise }) {
   const params = use(paramsPromise);
-  const { user: clientUser } = useAuth();
+  const { user: clientUser, profile: clientProfile } = useAuth();
 
   const [profile, setProfile] = useState(null);
   const [services, setServices] = useState([]);
@@ -180,6 +181,13 @@ export default function ProfessionalProfilePage({ params: paramsPromise }) {
         appointment_time: bookingDetails.appointmentDateTime.toISOString(),
         services: { duration: selectedService.duration }
       }]);
+      sendBookingConfirmationEmail({
+          clientEmail: clientUser.email,
+          clientName: clientProfile.full_name,
+          professionalName: profile.full_name,
+          serviceName: selectedService.name,
+          appointmentTime: bookingDetails.appointmentDateTime.toISOString()
+        });
     }
     setIsBooking(false);
   };

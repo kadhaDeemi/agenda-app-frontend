@@ -13,7 +13,7 @@ export default function ManageServicesPage() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState(''); // 'edit' o 'delete'
+  const [modalMode, setModalMode] = useState(''); 
   const [selectedService, setSelectedService] = useState(null);
 
   // Estados para el form
@@ -139,7 +139,6 @@ export default function ManageServicesPage() {
     if (error) {
       toast.error('Error al actualizar el servicio: ' + error.message);
     } else {
-      // Usamos el 'data' devuelto para asegurar consistencia
       setServices(services.map(s => s.id === selectedService.id ? selectedService : s));
       toast.success('Servicio actualizado con éxito.');
     }
