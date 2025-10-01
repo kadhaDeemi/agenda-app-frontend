@@ -72,6 +72,7 @@ export default function AdminDashboardPage() {
   const [localName, setLocalName] = useState('');
   const [localAddress, setLocalAddress] = useState('');
   const [localPhone, setLocalPhone] = useState('');
+  const [localCategory, setLocalCategory] = useState('');
   const [isUpdatingLocal, setIsUpdatingLocal] = useState(false);
   
 
@@ -106,6 +107,7 @@ export default function AdminDashboardPage() {
       setLocalName(local.name || '');
       setLocalAddress(local.address || '');
       setLocalPhone(local.phone || '');
+      setLocalCategory(local.category || ''); 
     }
   }, [local]);
 
@@ -535,6 +537,7 @@ export default function AdminDashboardPage() {
         name: localName,
         address: localAddress,
         phone: localPhone,
+        category: localCategory,
       })
       .eq('id', local.id)
       .select()
@@ -585,6 +588,11 @@ return (
                     <input id="localPhone" type="tel" value={localPhone} onChange={(e) => setLocalPhone(e.target.value)}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
                   </div>
+                  <div>
+                    <label htmlFor="localCategory" className="block text-sm font-medium text-gray-700">Categoría del Local</label>
+                    <input id="localCategory" type="text" value={localCategory} onChange={(e) => setLocalCategory(e.target.value)} placeholder="Ej: Barbería, Salón de Belleza, Estudio de Tatuajes"
+                    className="mt-1 block w-full px-3 py-2 border rounded-md"/>
+                    </div>
                     <button type="submit" disabled={isUpdatingLocal} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400">
                       {isUpdatingLocal ? 'Guardando...' : 'Guardar Información'}
                     </button>

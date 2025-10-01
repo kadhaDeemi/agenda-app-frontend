@@ -27,24 +27,23 @@ export default function MyAppointmentsPage() {
     const fetchAppointments = async () => {
       if (user) {
         setLoading(true);
+        //llamamos a nuestra nueva funcion RPC 
         const { data, error } = await supabase
-          .from('appointments')
-          .select(`
-            id,
-            appointment_time,
-            status,
-            services ( name ),
-            professional:profiles!appointments_professional_id_fkey ( full_name, id ),
-            reviews ( id )
-          `)
-          .eq('client_id', user.id)
-          .order('appointment_time', { ascending: false });
+          .rpc('get_client_appointments', {
+            p_client_id: user.id
+          });
 
-        if (error) console.error('Error fetching appointments:', error);
-        else setAppointments(data || []);
+        if (error) {
+          console.error('Error fetching appointments:', error);
+          toast.error('No se pudieron cargar tus citas.');
+        } else {
+          const validAppointments = data ? data.filter(appt => appt.services && appt.services.id) : [];
+          setAppointments(validAppointments);
+        }
         setLoading(false);
       }
     };
+
     fetchAppointments();
   }, [user]);
 
@@ -52,13 +51,25 @@ export default function MyAppointmentsPage() {
   const canCancelAppointment = (appointmentTime) => new Date(appointmentTime).getTime() - new Date().getTime() > 8 * 60 * 60 * 1000;
   const openCancelModal = (appointment) => { setAppointmentToCancel(appointment); setIsCancelModalOpen(true); };
   const closeCancelModal = () => { setIsCancelModalOpen(false); setAppointmentToCancel(null); };
+
   const handleCancelAppointment = async () => {
     if (!appointmentToCancel) return;
-    const { data, error } = await supabase.from('appointments').update({ status: 'cancelada' }).eq('id', appointmentToCancel.id)
-    .select('*, services(name), professional:profiles!...(full_name, id), reviews(id)').single();
-    if (error) { toast.error('Hubo un error al cancelar la cita.'); console.error(error); } 
-    else {
-      setAppointments(prev => prev.map(appt => appt.id === appointmentToCancel.id ? data : appt));
+   const { error } = await supabase
+      .from('appointments')
+      .update({ status: 'cancelada' })
+      .eq('id', appointmentToCancel.id);
+
+    if (error) {
+      toast.error('Hubo un error al cancelar la cita.');
+      console.error(error);
+    } else {
+      setAppointments(prev =>
+        prev.map(appt =>
+          appt.id === appointmentToCancel.id
+            ? { ...appt, status: 'cancelada' }
+            : appt
+        )
+      );
       toast.success('Cita cancelada con éxito.');
     }
     closeCancelModal();
@@ -96,89 +107,121 @@ export default function MyAppointmentsPage() {
   return (
     <PrivateRoute>
       <div className="container mx-auto px-6 py-8">
-        <h1 className="text-3xl font-bold mb-6">Mis Citas</h1>
-        {loading ? (<p>Cargando tus citas...</p>) : (
-          <div className="space-y-8">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-2xl font-bold mb-4">Próximas Citas</h2>
+        <h1 className="text-3xl font-bold mb-8">Mis Citas</h1>
+        
+        {loading ? (
+          <p>Cargando tus citas...</p>
+        ) : appointments.length === 0 ? (
+          <div className="text-center bg-white p-8 rounded-lg shadow-md">
+            <p className="text-gray-600">Aún no tienes ninguna cita agendada.</p>
+          </div>
+        ) : (
+          <div className="space-y-10">
+            {/*SECCION PROX CITAS */}
+            <div>
+              <h2 className="text-2xl font-semibold mb-4 border-b pb-2">Próximas Citas</h2>
               {upcomingAppointments.length > 0 ? (
-                <ul className="space-y-4">
-                  {upcomingAppointments.map((appt) => {
-                    const isCancellationDisabled = !canCancelAppointment(appt.appointment_time) || appt.status !== 'agendada';
-                    return (
-                      <li key={appt.id} className="p-4 border rounded-lg">
-                         <div className="flex flex-wrap justify-between items-center">
-                            <div>
-                                <p className="font-bold text-lg">{appt.services.name}</p>
-                                <p>Con: {appt.professional.full_name}</p>
-                                <p>Fecha: {new Date(appt.appointment_time).toLocaleString()}</p>
-                                <p className="capitalize">Estado: <span className="font-semibold">{appt.status}</span></p>
-                            </div>
-                            <button onClick={() => openCancelModal(appt)} disabled={isCancellationDisabled} 
-                            className={`mt-4 sm:mt-0 font-bold py-2 px-4 rounded-lg transition-colors ${isCancellationDisabled ? 'bg-gray-400 cursor-not-allowed' : 
-                            'bg-red-500 hover:bg-red-600 text-white'}`} title={isCancellationDisabled ? "Esta cita no se puede cancelar" : "Cancelar la cita"}>
-                                Cancelar Cita
-                            </button>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (<p>No tienes ninguna cita próxima.</p>)}
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-2xl font-bold mb-4">Historial de Citas</h2>
-              {pastAppointments.length > 0 ? (
-                <ul className="space-y-4">
-                  {pastAppointments.map((appt) => (
-                    <li key={appt.id} className="p-4 border rounded-lg bg-gray-50">
+                <div className="space-y-6">
+                  {upcomingAppointments.map((appt) => (
+                    <div key={appt.id} className="bg-white p-6 rounded-lg shadow-md">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-bold text-lg">{appt.services.name}</p>
-                          <p>Con: {appt.professional.full_name}</p>
-                          <p>Fecha: {new Date(appt.appointment_time).toLocaleString()}</p>
-                          <p className="capitalize">Estado: <span className="font-semibold">{appt.status}</span></p>
+                          <h3 className="text-xl font-bold">{appt.services.name}</h3>
+                          <p className="text-gray-600">con <strong>{appt.professional.full_name}</strong></p>
+                          <p className="font-semibold mt-2">{new Date(appt.appointment_time).toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'short' })}</p>
                         </div>
-                        {appt.status === 'completada' && (!appt.reviews || appt.reviews.length === 0) &&
-                         (<button onClick={() => openReviewModal(appt)} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg text-sm">Dejar Reseña</button>)}
-                        {appt.status === 'completada' && (appt.reviews && appt.reviews.length > 0) &&
-                          (<p className="text-sm text-green-600 font-semibold">¡Gracias por tu reseña!</p>)}
+                        <span className="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">{appt.status}</span>
                       </div>
-                    </li>
+                      <div className="border-t mt-4 pt-4">
+                        <h4 className="font-semibold text-gray-700">Información de Contacto</h4>
+                        {appt.professional.local ? (
+                          <>
+                            <p className="text-sm text-gray-600"><strong>Lugar:</strong> {appt.professional.local.name}</p>
+                            <p className="text-sm text-gray-600"><strong>Dirección:</strong> {appt.professional.local.address || 'No especificada'}</p>
+                            <p className="text-sm text-gray-600"><strong>Teléfono del Local:</strong> {appt.professional.local.phone || 'No especificado'}</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-600"><strong>Dirección:</strong> {appt.professional.address || 'No especificada'}</p>
+                            <p className="text-sm text-gray-600"><strong>Email:</strong> {appt.professional.email}</p>
+                            <p className="text-sm text-gray-600"><strong>Teléfono del Profesional:</strong> {appt.professional.phone || 'No especificado'}</p>
+                          </>
+                        )}
+                      </div>
+                      <div className="mt-4 text-right">
+                        <button onClick={() => openCancelModal(appt)} disabled={!canCancelAppointment(appt.appointment_time)} 
+                        className="text-red-500 hover:text-red-700 font-semibold text-sm disabled:text-gray-400 disabled:cursor-not-allowed"
+                        title={!canCancelAppointment(appt.appointment_time) ? "Solo puedes cancelar con más de 8 horas de antelación" : "Cancelar Cita"}>
+                          Cancelar Cita
+                        </button>
+                      </div>
+                    </div>
                   ))}
-                </ul>
-              ) : (<p>No tienes citas en tu historial.</p>)}
+                </div>
+              ) : <p className="text-gray-500">No tienes próximas citas.</p>}
+            </div>
+
+            {/*SECCIoN DE HISTORIAL DE CITAS*/}
+            <div>
+              <h2 className="text-2xl font-semibold mb-4 border-b pb-2">Historial de Citas</h2>
+              {pastAppointments.length > 0 ? (
+                <div className="space-y-6">
+                  {pastAppointments.map((appt) => (
+                    <div key={appt.id} className="bg-white p-6 rounded-lg shadow-md opacity-80">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-700">{appt.services.name}</h3>
+                          <p className="text-gray-600">con <strong>{appt.professional.full_name}</strong></p>
+                          <p className="font-semibold text-gray-500 mt-2">{new Date(appt.appointment_time).toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                        </div>
+                        <span className={`px-3 py-1 text-sm font-semibold rounded-full ${appt.status === 'completada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                        </span>
+                      </div>
+                      {appt.status === 'completada' && (
+                        <div className="mt-4 text-right">
+                          {appt.reviews && appt.reviews.length > 0 ? (
+                             <p className="text-sm font-semibold text-green-600">¡Gracias por tu reseña!</p>
+                          ) : (
+                            <button onClick={() => openReviewModal(appt)} className="text-blue-500 hover:text-blue-700 font-semibold text-sm">
+                              Dejar Reseña
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-gray-500">Aún no tienes citas pasadas.</p>}
             </div>
           </div>
         )}
       </div>
 
-      {/* MODAL DE CANCELACIÓN */}
+      {/*MODALES */}
       {isCancelModalOpen && (
         <Modal isOpen={isCancelModalOpen} closeModal={closeCancelModal} title="Confirmar Cancelación">
-          <p className="text-sm text-gray-600">¿Estás seguro de que quieres cancelar tu cita para <span className="font-bold">{appointmentToCancel.services.name}</span>?</p>
+          <p>¿Estás seguro de que quieres cancelar tu cita para <strong>{appointmentToCancel.services.name}</strong>?</p>
           <div className="mt-6 flex justify-end gap-4">
-            <button onClick={closeCancelModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none">
-              No, volver
-              </button>
-            <button onClick={handleCancelAppointment} className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none">
-              Sí, cancelar
-            </button>
+            <button onClick={closeCancelModal} className="px-4 py-2 rounded-md bg-gray-200">No, volver</button>
+            <button onClick={handleCancelAppointment} className="px-4 py-2 rounded-md bg-red-500 text-white">Sí, cancelar</button>
           </div>
         </Modal>
       )}
 
-      {/* MODAL DE RESEÑA */}
       {isReviewModalOpen && (
-        <Modal isOpen={isReviewModalOpen} closeModal={closeReviewModal} title={`Califica tu servicio de ${appointmentToReview.services.name}`}>
+        <Modal isOpen={isReviewModalOpen} closeModal={closeReviewModal} title={`Califica: ${appointmentToReview.services.name}`}>
           <form onSubmit={handleReviewSubmit}>
             <div className="flex justify-center my-4">
-              {[1, 2, 3, 4, 5].map((star) => (<button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none">
-                <Star className={`h-8 w-8 ${rating >= star ? 'text-yellow-400' : 'text-gray-300'}`} fill={rating >= star ? 'currentColor' : 'none'} /></button>))}
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none">
+                  <Star className={`h-8 w-8 cursor-pointer ${rating >= star ? 'text-yellow-400' : 'text-gray-300'}`} fill="currentColor" />
+                </button>
+              ))}
             </div>
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Escribe un comentario (opcional)..." className="w-full h-24 p-2 border rounded-md" />
             <div className="mt-4 flex justify-end">
-              <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">Enviar Reseña</button>
+              <button type="submit" className="px-4 py-2 rounded-md bg-blue-600 text-white">Enviar Reseña</button>
             </div>
           </form>
         </Modal>

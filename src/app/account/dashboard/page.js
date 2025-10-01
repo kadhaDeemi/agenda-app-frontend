@@ -33,30 +33,24 @@ export default function ProfessionalDashboardPage() {
     const fetchAppointments = async () => {
       if (user) {
         setLoading(true);
-        // filtra por reservas por id del prof. - trae nombre del servicio y nombre del cliente
+        //funcion rpc
         const { data, error } = await supabase
-          .from('appointments')
-          .select(`
-            id,
-            appointment_time,
-            status,
-            services ( name, duration ),
-            client:profiles!appointments_client_id_fkey ( full_name )
-          `)
-          .eq('professional_id', user.id)
-          .order('appointment_time', { ascending: true });
+          .rpc('get_professional_appointments', {
+            p_professional_id: user.id
+          });
 
         if (error) {
           console.error('Error fetching appointments:', error);
+          toast.error('No se pudieron cargar las citas.');
         } else {
-          setAppointments(data);
+          setAppointments(data || []);
         }
         setLoading(false);
       }
     };
 
     fetchAppointments();
-    }, [user]);
+  }, [user]);
 
     // cambiar estado de la reserva
     const handleUpdateStatus = async (appointmentId, newStatus) => {
@@ -104,10 +98,17 @@ export default function ProfessionalDashboardPage() {
   const calendarEvents = useMemo(() => {
     return filteredAppointments.map(appt => ({
       id: appt.id,
-      title: `${appt.services.name} - ${appt.client.full_name}`,
+      title: `${appt.service_name} - ${appt.client_full_name}`,
       start: new Date(appt.appointment_time),
-      end: new Date(new Date(appt.appointment_time).getTime() + (Math.ceil(appt.services.duration / 30) * 30) * 60000),
-      extendedProps: { status: appt.status },
+      // Usamos el nuevo service_duration
+      end: new Date(new Date(appt.appointment_time).getTime() + appt.service_duration * 60000),
+      extendedProps: {
+        status: appt.status,
+        clientEmail: appt.client_email,
+        clientPhone: appt.client_phone,
+        clientName: appt.client_full_name,
+        serviceName: appt.service_name,
+      },
       backgroundColor: { 'agendada': '#3B82F6', 'confirmada': '#10B981', 'completada': '#6B7280', 'cancelada': '#EF4444' }[appt.status],
       borderColor: { 'agendada': '#2563EB', 'confirmada': '#059669', 'completada': '#4B5563', 'cancelada': '#DC2626' }[appt.status],
     }));
@@ -125,15 +126,17 @@ export default function ProfessionalDashboardPage() {
   }
 
   const handleEventClick = (info) => {
-    const { id, title, extendedProps, start } = info.event;
-    const isPastAppointment = new Date(start) < new Date();
-    
+    const { id, extendedProps, start } = info.event;
+    // Pasamos todos los datos que necesitamos al modal
     openModal({
       id,
-      title,
       status: extendedProps.status,
       start,
-      isPastAppointment
+      isPastAppointment: new Date(start) < new Date(),
+      clientName: extendedProps.clientName,
+      serviceName: extendedProps.serviceName,
+      clientEmail: extendedProps.clientEmail,
+      clientPhone: extendedProps.clientPhone,
     });
   };
 
@@ -192,27 +195,39 @@ export default function ProfessionalDashboardPage() {
           </div>
         )}
       </div>
+      {/*modal*/}
       {selectedEvent && (
         <Modal isOpen={isModalOpen} closeModal={closeModal} title="Detalles de la Cita">
-          <p className="text-lg font-semibold text-gray-800">{selectedEvent.title}</p>
-          <p className="text-sm text-gray-600">
+          {/* Info de la cita */}
+          <p className="text-lg font-semibold text-gray-800">{selectedEvent.serviceName}</p>
+          <p className="text-gray-600">
+            con <strong>{selectedEvent.clientName}</strong>
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
             {selectedEvent.start.toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'short' })}
           </p>
-          <p className="text-sm text-gray-600 capitalize">
+          <p className="text-sm text-gray-500 capitalize">
             Estado: <span className="font-bold">{selectedEvent.status}</span>
           </p>
-
+          
+          {/* seccion de contacto del cliente */}
+          <div className="border-t my-4"></div>
+          <h4 className="font-semibold text-gray-700">Información del Cliente</h4>
+          <p className="text-sm text-gray-600"><strong>Email:</strong> {selectedEvent.clientEmail || 'No especificado'}</p>
+          <p className="text-sm text-gray-600"><strong>Teléfono:</strong> {selectedEvent.clientPhone || 'No especificado'}</p>
+          
+          {/* BTNS */}
           <div className="mt-6 flex flex-col gap-3">
-            {selectedEvent.status === 'agendada' && (
+            {selectedEvent.status === 'agendada' && !selectedEvent.isPastAppointment && (
               <>
                 <button
                   onClick={() => handleUpdateStatus(selectedEvent.id, 'confirmada')}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 focus:outline-none">
+                  className="w-full inline-flex justify-center rounded-md border border-transparent bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600">
                   Confirmar Cita
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(selectedEvent.id, 'cancelada')}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 focus:outline-none">
+                  className="w-full inline-flex justify-center rounded-md border border-transparent bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600">
                   Cancelar Cita
                 </button>
               </>
@@ -221,13 +236,13 @@ export default function ProfessionalDashboardPage() {
             {selectedEvent.status === 'confirmada' && selectedEvent.isPastAppointment && (
               <button
                 onClick={() => handleUpdateStatus(selectedEvent.id, 'completada')}
-                className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 focus:outline-none">
+                className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600">
                 Marcar como Completada
               </button>
             )}
             <button
               onClick={closeModal}
-              className="mt-2 w-full inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+              className="mt-2 w-full inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               Cerrar
             </button>
           </div>

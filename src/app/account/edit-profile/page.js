@@ -19,6 +19,7 @@ export default function EditProfilePage() {
   const [fullName, setFullName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [specialty, setSpecialty] = useState('');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function EditProfilePage() {
       setFullName(profile.full_name || '');
       setAddress(profile.address || '');
       setPhone(profile.phone || '');
+      setSpecialty(profile.specialty || '');
     }
   }, [profile]);
 
@@ -96,6 +98,7 @@ export default function EditProfilePage() {
         full_name: fullName,
         address: address,
         phone: phone,
+        specialty: specialty,
       })
       .eq('id', user.id);
 
@@ -135,6 +138,19 @@ export default function EditProfilePage() {
                     <input id="phone"  type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ej: +56 9 1234 5678"
                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"/>
                 </div>
+                {profile?.role === 'profesional' && profile?.local_id === null && (
+                    <div>
+                        <label htmlFor="specialty" className="block text-sm font-medium text-gray-700">Especialidad</label>
+                        <input
+                            id="specialty"
+                            type="text"
+                            value={specialty}
+                            onChange={(e) => setSpecialty(e.target.value)}
+                            placeholder="Ej: Barbero, Tatuador, Estilista"
+                            className="mt-1 block w-full px-3 py-2 border rounded-md"
+                        />
+                    </div>
+                )}
                 <button type="submit" disabled={isUpdatingProfile} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400">
                     {isUpdatingProfile ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
