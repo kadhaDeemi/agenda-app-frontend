@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext'; 
 import { supabase } from '@/lib/supabaseClient';
+import Image from 'next/image';
 
 export default function Navbar() {
   const { user, profile } = useAuth(); // Obtiene el usuario
@@ -18,9 +19,14 @@ export default function Navbar() {
     <nav className="bg-white shadow-md">
       <div className="container mx-auto px-6 py-3 flex justify-between items-center">
         <Link href="/" className="text-xl font-bold text-gray-800">
-          AgendaPro
+        <Image 
+            src="/Logo-Horizontal.webp" 
+            alt="Logo de ChronosPro" 
+            width={200} // Ajusta el ancho según sea necesario
+            height={40} // Ajusta la altura según sea necesario
+            />
         </Link>
-        
+
         <div>
           {user ? (
             // Si hay un usuario logueado
